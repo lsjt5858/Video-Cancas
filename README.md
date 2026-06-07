@@ -14,6 +14,8 @@ infra          Docker Compose dependencies
 docs           Product and engineering docs
 ```
 
+`apps/web` 已迁入第一版前端原型，覆盖项目列表、项目工作台、剧本编辑、分镜表、无限画布、素材库和时间线。当前前端数据仍使用 localStorage，后续会逐步接入 `apps/api`。
+
 ## Local Development
 
 ```bash
