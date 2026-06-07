@@ -31,3 +31,7 @@ npm run dev:worker
 ```
 
 The first runnable target is the frontend shell plus API health check. Business modules will be implemented by the staged plan in `docs/05-开发计划与验收.md`.
+
+## Development Tracking
+
+功能开发进度见 [docs/06-功能开发进度.md](docs/06-功能开发进度.md)。
