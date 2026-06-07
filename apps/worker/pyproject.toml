@@ -1,0 +1,14 @@
+[project]
+name = "video-cancas-worker"
+version = "0.1.0"
+description = "Celery worker for Video Cancas AI and media jobs."
+requires-python = ">=3.11"
+dependencies = [
+  "celery[redis]>=5.4.0",
+  "pydantic-settings>=2.4.0",
+  "boto3>=1.34.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

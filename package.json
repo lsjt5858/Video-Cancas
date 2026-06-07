@@ -1,0 +1,17 @@
+{
+  "name": "video-cancas",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "lint:web": "npm --workspace apps/web run lint",
+    "dev:api": "uvicorn app.main:app --reload --app-dir apps/api",
+    "dev:worker": "celery --workdir apps/worker -A app.main.celery_app worker --loglevel=INFO",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  }
+}
