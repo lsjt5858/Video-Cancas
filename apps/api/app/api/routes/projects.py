@@ -163,8 +163,12 @@ def delete_project_scene(
         db.execute(
             delete(CanvasNode).where(
                 CanvasNode.project_id == project_id,
-                CanvasNode.ref_type == "shot",
-                CanvasNode.ref_id.in_(shot_ids),
+            (
+                (CanvasNode.ref_type == "scene")
+                & (CanvasNode.ref_id == scene_id)
+                | (CanvasNode.ref_type == "shot")
+                & (CanvasNode.ref_id.in_(shot_ids))
+            ),
             )
         )
     db.delete(scene)
@@ -242,7 +246,7 @@ def delete_project_shot(
 @router.get("/{project_id}/canvas/nodes", response_model=list[CanvasNodeRead])
 def list_project_canvas_nodes(project_id: UUID, db: Session = Depends(get_db)) -> list[dict]:
     ensure_project_exists(project_id, db)
-    sync_shot_canvas_nodes(project_id, db)
+    sync_project_canvas(project_id, db)
     nodes = db.scalars(
         select(CanvasNode)
         .where(CanvasNode.project_id == project_id)
@@ -365,32 +369,85 @@ def get_project_canvas_node_or_404(
     return node
 
 
-def sync_shot_canvas_nodes(project_id: UUID, db: Session) -> None:
-    existing_shot_node_refs = set(
+def sync_project_canvas(project_id: UUID, db: Session) -> None:
+    nodes_by_ref = {
+        (node.ref_type, node.ref_id): node
+        for node in db.scalars(select(CanvasNode).where(CanvasNode.project_id == project_id))
+        if node.ref_type and node.ref_id
+    }
+    has_changes = False
+
+    script = db.scalar(select(Script).where(Script.project_id == project_id))
+    script_node = nodes_by_ref.get(("script", script.id)) if script else None
+    if script and script_node is None:
+        script_node = CanvasNode(
+            project_id=project_id,
+            node_type="script",
+            title=script.title or "剧本",
+            position_x=80,
+            position_y=80,
+            width=260,
+            height=180,
+            ref_type="script",
+            ref_id=script.id,
+            data={"script_id": str(script.id), "version": script.version},
+        )
+        db.add(script_node)
+        db.flush()
+        nodes_by_ref[("script", script.id)] = script_node
+        has_changes = True
+
+    scenes = list(
         db.scalars(
-            select(CanvasNode.ref_id).where(
-                CanvasNode.project_id == project_id,
-                CanvasNode.ref_type == "shot",
-            )
+            select(Scene)
+            .where(Scene.project_id == project_id)
+            .order_by(Scene.scene_number.asc(), Scene.id.asc())
         )
     )
+    scene_nodes: dict[UUID, CanvasNode] = {}
+    for index, scene in enumerate(scenes):
+        scene_node = nodes_by_ref.get(("scene", scene.id))
+        if scene_node is None:
+            scene_node = CanvasNode(
+                project_id=project_id,
+                node_type="scene",
+                title=f"场景 {scene.scene_number}",
+                position_x=360,
+                position_y=80 + index * 260,
+                width=240,
+                height=160,
+                ref_type="scene",
+                ref_id=scene.id,
+                data={"scene_id": str(scene.id)},
+            )
+            db.add(scene_node)
+            db.flush()
+            nodes_by_ref[("scene", scene.id)] = scene_node
+            has_changes = True
+        scene_nodes[scene.id] = scene_node
+        if script_node:
+            has_changes = ensure_canvas_edge(
+                db,
+                project_id,
+                script_node.id,
+                scene_node.id,
+                "story_flow",
+            ) or has_changes
+
     shots = db.scalars(
         select(Shot)
         .where(Shot.project_id == project_id)
-        .order_by(Shot.shot_number.asc(), Shot.id.asc())
+        .order_by(Shot.scene_id.asc(), Shot.shot_number.asc(), Shot.id.asc())
     )
 
-    has_new_nodes = False
     for index, shot in enumerate(shots):
-        if shot.id in existing_shot_node_refs:
-            continue
-
-        position = shot.position or {
-            "x": 100 + (index % 5) * 250,
-            "y": 100 + (index // 5) * 200,
-        }
-        db.add(
-            CanvasNode(
+        shot_node = nodes_by_ref.get(("shot", shot.id))
+        if shot_node is None:
+            position = {
+                "x": 640 + (index % 4) * 280,
+                "y": 80 + (index // 4) * 220,
+            }
+            shot_node = CanvasNode(
                 project_id=project_id,
                 node_type="shot",
                 title=f"镜头 {shot.shot_number}",
@@ -402,11 +459,53 @@ def sync_shot_canvas_nodes(project_id: UUID, db: Session) -> None:
                 ref_id=shot.id,
                 data={"shot_id": str(shot.id), "scene_id": str(shot.scene_id)},
             )
-        )
-        has_new_nodes = True
+            db.add(shot_node)
+            db.flush()
+            nodes_by_ref[("shot", shot.id)] = shot_node
+            has_changes = True
 
-    if has_new_nodes:
+        scene_node = scene_nodes.get(shot.scene_id)
+        if scene_node:
+            has_changes = ensure_canvas_edge(
+                db,
+                project_id,
+                scene_node.id,
+                shot_node.id,
+                "story_flow",
+            ) or has_changes
+
+    if has_changes:
         db.commit()
+
+
+def ensure_canvas_edge(
+    db: Session,
+    project_id: UUID,
+    source_node_id: UUID,
+    target_node_id: UUID,
+    relation_type: str,
+) -> bool:
+    existing_edge = db.scalar(
+        select(CanvasEdge).where(
+            CanvasEdge.project_id == project_id,
+            CanvasEdge.source_node_id == source_node_id,
+            CanvasEdge.target_node_id == target_node_id,
+            CanvasEdge.relation_type == relation_type,
+        )
+    )
+    if existing_edge is not None:
+        return False
+
+    db.add(
+        CanvasEdge(
+            project_id=project_id,
+            source_node_id=source_node_id,
+            target_node_id=target_node_id,
+            relation_type=relation_type,
+            data={},
+        )
+    )
+    return True
 
 
 def serialize_canvas_node(node: CanvasNode) -> dict:

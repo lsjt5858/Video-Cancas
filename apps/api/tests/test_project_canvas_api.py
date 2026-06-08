@@ -125,6 +125,18 @@ def create_scene(client: TestClient, project_id: str) -> dict:
     return response.json()
 
 
+def upsert_script(client: TestClient, project_id: str) -> dict:
+    response = client.put(
+        f"/api/projects/{project_id}/script",
+        json={
+            "title": "旧车站重逢",
+            "content": "母亲在旧车站等待离散多年的孩子。",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
 def create_shot(client: TestClient, project_id: str, scene_id: str) -> dict:
     response = client.post(
         f"/api/projects/{project_id}/shots",
@@ -143,9 +155,10 @@ def create_shot(client: TestClient, project_id: str, scene_id: str) -> dict:
     return response.json()
 
 
-def test_canvas_nodes_sync_existing_shots_and_persist_position_updates() -> None:
+def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> None:
     client = TestClient(app)
     project = create_project(client)
+    script = upsert_script(client, project["id"])
     scene = create_scene(client, project["id"])
     shot = create_shot(client, project["id"], scene["id"])
 
@@ -153,21 +166,57 @@ def test_canvas_nodes_sync_existing_shots_and_persist_position_updates() -> None
 
     assert list_response.status_code == 200
     nodes = list_response.json()
-    assert len(nodes) == 1
-    assert nodes[0]["node_type"] == "shot"
-    assert nodes[0]["ref_type"] == "shot"
-    assert nodes[0]["ref_id"] == shot["id"]
-    assert nodes[0]["position"] == {"x": 320, "y": 180}
+    nodes_by_ref = {(node["ref_type"], node["ref_id"]): node for node in nodes}
+    assert ("script", script["id"]) in nodes_by_ref
+    assert ("scene", scene["id"]) in nodes_by_ref
+    assert ("shot", shot["id"]) in nodes_by_ref
+    assert nodes_by_ref[("script", script["id"])]["position"] == {"x": 80, "y": 80}
+    assert nodes_by_ref[("scene", scene["id"])]["position"] == {"x": 360, "y": 80}
+    assert nodes_by_ref[("shot", shot["id"])]["position"] == {"x": 640, "y": 80}
+
+    edges_response = client.get(f"/api/projects/{project['id']}/canvas/edges")
+    assert edges_response.status_code == 200
+    edges = edges_response.json()
+    script_node = nodes_by_ref[("script", script["id"])]
+    scene_node = nodes_by_ref[("scene", scene["id"])]
+    shot_node = nodes_by_ref[("shot", shot["id"])]
+    assert {
+        "source_node_id": script_node["id"],
+        "target_node_id": scene_node["id"],
+        "relation_type": "story_flow",
+    } in [
+        {
+            "source_node_id": edge["source_node_id"],
+            "target_node_id": edge["target_node_id"],
+            "relation_type": edge["relation_type"],
+        }
+        for edge in edges
+    ]
+    assert {
+        "source_node_id": scene_node["id"],
+        "target_node_id": shot_node["id"],
+        "relation_type": "story_flow",
+    } in [
+        {
+            "source_node_id": edge["source_node_id"],
+            "target_node_id": edge["target_node_id"],
+            "relation_type": edge["relation_type"],
+        }
+        for edge in edges
+    ]
 
     update_response = client.patch(
-        f"/api/projects/{project['id']}/canvas/nodes/{nodes[0]['id']}",
+        f"/api/projects/{project['id']}/canvas/nodes/{shot_node['id']}",
         json={"position": {"x": 640, "y": 260}},
     )
     assert update_response.status_code == 200
     assert update_response.json()["position"] == {"x": 640, "y": 260}
 
     list_after_update = client.get(f"/api/projects/{project['id']}/canvas/nodes")
-    assert list_after_update.json()[0]["position"] == {"x": 640, "y": 260}
+    updated_nodes_by_ref = {
+        (node["ref_type"], node["ref_id"]): node for node in list_after_update.json()
+    }
+    assert updated_nodes_by_ref[("shot", shot["id"])]["position"] == {"x": 640, "y": 260}
 
 
 def test_canvas_edges_can_be_created_between_project_nodes() -> None:
@@ -213,14 +262,15 @@ def test_deleting_scene_removes_its_canvas_shot_nodes() -> None:
     client = TestClient(app)
     project = create_project(client)
     scene = create_scene(client, project["id"])
-    create_shot(client, project["id"], scene["id"])
+    shot = create_shot(client, project["id"], scene["id"])
 
     nodes_before_delete = client.get(f"/api/projects/{project['id']}/canvas/nodes").json()
-    assert len(nodes_before_delete) == 1
+    assert any(node["ref_id"] == scene["id"] for node in nodes_before_delete)
 
     delete_response = client.delete(f"/api/projects/{project['id']}/scenes/{scene['id']}")
     assert delete_response.status_code == 204
 
     nodes_after_delete = client.get(f"/api/projects/{project['id']}/canvas/nodes")
     assert nodes_after_delete.status_code == 200
-    assert nodes_after_delete.json() == []
+    assert all(node["ref_id"] != scene["id"] for node in nodes_after_delete.json())
+    assert all(node["ref_id"] != shot["id"] for node in nodes_after_delete.json())

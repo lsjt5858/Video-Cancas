@@ -3,7 +3,9 @@ import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { ZoomIn, ZoomOut, Maximize2, Image, Video } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Image, Video, FileText, MapPin } from 'lucide-react';
+import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
+import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
   projectId: string;
@@ -18,13 +20,16 @@ interface CanvasState {
 export default function CanvasView({ projectId }: CanvasViewProps) {
   const {
     getCanvasNodesByProject,
+    getCanvasEdgesByProject,
+    getScenesByProject,
     getShotsByProject,
     moveCanvasNodeLocally,
     updateCanvasNode,
   } = useApp();
+  const scenes = getScenesByProject(projectId);
   const shots = getShotsByProject(projectId);
   const nodes = getCanvasNodesByProject(projectId);
-  const shotNodes = nodes.filter(node => node.nodeType === 'shot' && node.refId);
+  const edges = getCanvasEdgesByProject(projectId);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [canvas, setCanvas] = useState<CanvasState>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -36,6 +41,9 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const selectedNode = nodes.find(node => node.id === selectedNodeId);
   const selectedShot = selectedNode?.refId
     ? shots.find(shot => shot.id === selectedNode.refId)
+    : undefined;
+  const selectedScene = selectedNode?.refId
+    ? scenes.find(scene => scene.id === selectedNode.refId)
     : undefined;
 
   const handleZoomIn = () => {
@@ -121,7 +129,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
       <div className="border-b bg-background px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {shotNodes.length} 个镜头节点
+            {nodes.length} 个画布节点
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -157,21 +165,59 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
           }}
           className="absolute inset-0"
         >
-          {/* Grid background */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ width: '5000px', height: '5000px' }}>
+          {/* Grid background and edges */}
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ width: '5000px', height: '5000px' }}
+          >
             <defs>
               <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-muted-foreground/20" />
+                <path
+                  d="M 40 0 L 0 0 0 40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="0.5"
+                  className="text-muted-foreground/20"
+                />
               </pattern>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" className="fill-muted-foreground/40" />
+              </marker>
             </defs>
             <rect width="100%" height="100%" fill="url(#grid)" />
+            {edges.map((edge) => {
+              const source = nodes.find(node => node.id === edge.sourceNodeId);
+              const target = nodes.find(node => node.id === edge.targetNodeId);
+              if (!source || !target) return null;
+
+              const sourceX = source.position.x + source.size.width;
+              const sourceY = source.position.y + source.size.height / 2;
+              const targetX = target.position.x;
+              const targetY = target.position.y + target.size.height / 2;
+                const controlOffset = Math.max(80, Math.abs(targetX - sourceX) / 2);
+                const pathData = [
+                  `M ${sourceX} ${sourceY}`,
+                  `C ${sourceX + controlOffset} ${sourceY},`,
+                  `${targetX - controlOffset} ${targetY},`,
+                  `${targetX} ${targetY}`,
+                ].join(' ');
+
+                return (
+                  <path
+                    key={edge.id}
+                    d={pathData}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    markerEnd="url(#arrow)"
+                    className="text-muted-foreground/40"
+                  />
+                );
+            })}
           </svg>
 
-          {/* Shot nodes */}
-          {shotNodes.map((node) => {
-            const shot = shots.find(item => item.id === node.refId);
-            if (!shot) return null;
-
+          {/* Canvas nodes */}
+          {nodes.map((node) => {
             return (
               <div
                 key={node.id}
@@ -186,54 +232,122 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
                 }}
                 className="cursor-move"
               >
-                <Card
-                  className={`w-[200px] p-3 shadow-md hover:shadow-lg transition-shadow ${
-                    selectedNodeId === node.id ? 'ring-2 ring-primary' : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <Badge variant="outline" className="text-xs">
-                      镜头 {shot.shotNumber}
-                    </Badge>
-                    <div className="flex gap-1">
-                      {shot.imageUrl && <Image className="size-3 text-green-600" />}
-                      {shot.videoUrl && <Video className="size-3 text-blue-600" />}
-                    </div>
-                  </div>
-                  <div className="text-sm font-medium line-clamp-2 mb-1">
-                    {shot.description}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {shot.shotType} · {shot.duration}s
-                  </div>
-                  {shot.imageUrl && (
-                    <div className="mt-2 rounded overflow-hidden">
-                      <img
-                        src={shot.imageUrl}
-                        alt={shot.description}
-                        className="w-full h-24 object-cover"
-                      />
-                    </div>
-                  )}
-                </Card>
+                <CanvasNodeCard
+                  node={node}
+                  isSelected={selectedNodeId === node.id}
+                  scene={node.refId ? scenes.find(item => item.id === node.refId) : undefined}
+                  shot={node.refId ? shots.find(item => item.id === node.refId) : undefined}
+                />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Selected shot info */}
-      {selectedShot && (
+      {/* Selected node info */}
+      {selectedNode && (
         <div className="border-t bg-background px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium">镜头 {selectedShot.shotNumber}: {selectedShot.description}</div>
-              <div className="text-sm text-muted-foreground mt-1">{selectedShot.prompt}</div>
+              <div className="font-medium">
+                {getSelectedNodeTitle(selectedNode, selectedScene, selectedShot)}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {getSelectedNodeDescription(selectedNode, selectedScene, selectedShot)}
+              </div>
             </div>
-            <Badge>{selectedShot.shotType}</Badge>
+            <Badge>{getCanvasNodePresentation(selectedNode.nodeType).label}</Badge>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function CanvasNodeCard({
+  node,
+  isSelected,
+  scene,
+  shot,
+}: {
+  node: CanvasNode;
+  isSelected: boolean;
+  scene?: Scene;
+  shot?: Shot;
+}) {
+  const presentation = getCanvasNodePresentation(node.nodeType);
+  const title = getSelectedNodeTitle(node, scene, shot);
+  const description = getSelectedNodeDescription(node, scene, shot);
+
+  return (
+    <Card
+      className={`border-l-4 p-3 shadow-md hover:shadow-lg transition-shadow ${
+        presentation.accentClassName
+      } ${isSelected ? 'ring-2 ring-primary' : ''}`}
+      style={{ width: node.size.width }}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <Badge variant="outline" className={`text-xs ${presentation.badgeClassName}`}>
+          {presentation.label}
+        </Badge>
+        <NodeStatusIcons node={node} shot={shot} />
+      </div>
+      <div className="text-sm font-medium line-clamp-2 mb-1">{title}</div>
+      <div className="text-xs text-muted-foreground line-clamp-3">{description}</div>
+      {shot?.imageUrl && (
+        <div className="mt-2 rounded overflow-hidden">
+          <img
+            src={shot.imageUrl}
+            alt={shot.description}
+            className="w-full h-24 object-cover"
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function NodeStatusIcons({ node, shot }: { node: CanvasNode; shot?: Shot }) {
+  if (node.nodeType === 'script') {
+    return <FileText className="size-3 text-violet-600" />;
+  }
+  if (node.nodeType === 'scene') {
+    return <MapPin className="size-3 text-amber-600" />;
+  }
+  return (
+    <div className="flex gap-1">
+      {shot?.imageUrl && <Image className="size-3 text-green-600" />}
+      {shot?.videoUrl && <Video className="size-3 text-blue-600" />}
+    </div>
+  );
+}
+
+function getSelectedNodeTitle(
+  node: CanvasNode,
+  scene?: Scene,
+  shot?: Shot,
+): string {
+  if (node.nodeType === 'scene' && scene) {
+    return `场景 ${scene.sceneNumber}: ${scene.description}`;
+  }
+  if (node.nodeType === 'shot' && shot) {
+    return `镜头 ${shot.shotNumber}: ${shot.description}`;
+  }
+  return node.title || getCanvasNodePresentation(node.nodeType).label;
+}
+
+function getSelectedNodeDescription(
+  node: CanvasNode,
+  scene?: Scene,
+  shot?: Shot,
+): string {
+  if (node.nodeType === 'scene' && scene) {
+    return [scene.location, scene.timeOfDay, scene.characters.join('、')]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  if (node.nodeType === 'shot' && shot) {
+    return `${shot.shotType} · ${shot.duration}s · ${shot.prompt}`;
+  }
+  return '项目剧本入口，后续可联动角色、场景和镜头节点。';
 }
