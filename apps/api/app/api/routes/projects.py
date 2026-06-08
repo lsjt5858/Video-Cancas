@@ -1,21 +1,24 @@
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
+from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectRead
 
 router = APIRouter()
 
 
 @router.get("", response_model=list[ProjectRead])
-def list_projects() -> list[ProjectRead]:
-    return []
+def list_projects(db: Session = Depends(get_db)) -> list[Project]:
+    return list(db.scalars(select(Project).order_by(Project.created_at.desc(), Project.id.desc())))
 
 
 @router.post("", response_model=ProjectRead, status_code=201)
-def create_project(payload: ProjectCreate) -> ProjectRead:
-    return ProjectRead(
-        id=uuid4(),
+def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Project:
+    project = Project(
         name=payload.name,
         type=payload.type,
         style=payload.style,
@@ -23,16 +26,15 @@ def create_project(payload: ProjectCreate) -> ProjectRead:
         target_duration=payload.target_duration,
         status="draft",
     )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
-def get_project(project_id: UUID) -> ProjectRead:
-    return ProjectRead(
-        id=project_id,
-        name="Demo Project",
-        type="short_drama",
-        style="realistic_cinematic",
-        aspect_ratio="16:9",
-        target_duration=60,
-        status="draft",
-    )
+def get_project(project_id: UUID, db: Session = Depends(get_db)) -> Project:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
