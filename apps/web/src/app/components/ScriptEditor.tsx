@@ -1,21 +1,33 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Wand2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { createStoryboardGenerationPlan, STORYBOARD_RESULT_TAB } from '../lib/storyboardGeneration';
 
 interface ScriptEditorProps {
   projectId: string;
+  onGenerated?: (targetTab: typeof STORYBOARD_RESULT_TAB) => void;
 }
 
-export default function ScriptEditor({ projectId }: ScriptEditorProps) {
-  const { getProject, updateProject, getShotsByProject, createScene, createShot } = useApp();
+export default function ScriptEditor({ projectId, onGenerated }: ScriptEditorProps) {
+  const {
+    getProject,
+    updateProject,
+    getScenesByProject,
+    deleteScene,
+    getShotsByProject,
+    deleteShot,
+    createScene,
+    createShot,
+  } = useApp();
   const project = getProject(projectId);
   const shots = getShotsByProject(projectId);
   const [script, setScript] = useState(project?.script || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const generationInFlightRef = useRef(false);
 
   const handleSave = () => {
     if (project) {
@@ -25,11 +37,16 @@ export default function ScriptEditor({ projectId }: ScriptEditorProps) {
   };
 
   const handleGenerateShots = async () => {
+    if (generationInFlightRef.current) {
+      return;
+    }
+
     if (!script.trim()) {
       toast.error('请先输入剧本内容');
       return;
     }
 
+    generationInFlightRef.current = true;
     setIsGenerating(true);
     
     // Simulate AI processing
@@ -41,57 +58,25 @@ export default function ScriptEditor({ projectId }: ScriptEditorProps) {
         updateProject(project.id, { script });
       }
 
-      // Mock AI-generated scene breakdown
-      const mockScene = createScene({
-        projectId,
-        sceneNumber: 1,
-        description: '开场场景',
-        location: '城市街道',
-        timeOfDay: '白天',
-        characters: ['主角'],
-      });
+      getScenesByProject(projectId).forEach((scene) => deleteScene(scene.id));
+      getShotsByProject(projectId).forEach((shot) => deleteShot(shot.id));
 
-      // Generate mock shots
-      const mockShots = [
-        {
-          shotNumber: 1,
-          description: '城市全景，建筑林立',
-          shotType: 'wide' as const,
-          cameraMovement: 'static' as const,
-          duration: 3,
-          prompt: 'Wide shot of modern city skyline, bright daylight, cinematic',
-        },
-        {
-          shotNumber: 2,
-          description: '主角走在街道上',
-          shotType: 'medium' as const,
-          cameraMovement: 'tracking' as const,
-          duration: 5,
-          prompt: 'Medium shot of person walking on city street, following camera movement',
-        },
-        {
-          shotNumber: 3,
-          description: '主角特写，表情坚定',
-          shotType: 'close-up' as const,
-          cameraMovement: 'static' as const,
-          duration: 4,
-          prompt: 'Close-up portrait of determined person, cinematic lighting',
-        },
-      ];
+      const plan = createStoryboardGenerationPlan(projectId);
+      const mockScene = createScene(plan.scene);
 
-      mockShots.forEach((shot, index) => {
+      plan.shots.forEach((shot) => {
         createShot({
-          projectId,
           sceneId: mockScene.id,
           ...shot,
-          position: { x: 100 + index * 200, y: 100 },
         });
       });
 
-      toast.success(`已生成 ${mockShots.length} 个分镜`);
+      toast.success(`已生成 ${plan.shots.length} 个分镜`);
+      onGenerated?.(plan.targetTab);
     } catch (error) {
       toast.error('生成分镜失败');
     } finally {
+      generationInFlightRef.current = false;
       setIsGenerating(false);
     }
   };

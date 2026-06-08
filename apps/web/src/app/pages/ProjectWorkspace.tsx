@@ -77,7 +77,7 @@ export default function ProjectWorkspace() {
 
           <div className="flex-1 overflow-hidden">
             <TabsContent value="script" className="h-full m-0">
-              <ScriptEditor projectId={project.id} />
+              <ScriptEditor projectId={project.id} onGenerated={setActiveTab} />
             </TabsContent>
 
             <TabsContent value="shots" className="h-full m-0">
