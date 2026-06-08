@@ -35,6 +35,27 @@ export interface Shot {
   position?: { x: number; y: number }; // Canvas position
 }
 
+export interface CanvasNode {
+  id: string;
+  projectId: string;
+  nodeType: 'script' | 'scene' | 'shot' | 'prompt' | 'image_result' | 'video_result' | 'export';
+  title?: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  refType?: string;
+  refId?: string;
+  data: Record<string, unknown>;
+}
+
+export interface CanvasEdge {
+  id: string;
+  projectId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  relationType: string;
+  data: Record<string, unknown>;
+}
+
 export interface Asset {
   id: string;
   projectId: string;

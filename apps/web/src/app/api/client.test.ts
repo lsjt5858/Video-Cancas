@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mapProjectFromApi, mapSceneFromApi, mapShotFromApi } from './client';
+import {
+  mapCanvasEdgeFromApi,
+  mapCanvasNodeFromApi,
+  mapProjectFromApi,
+  mapSceneFromApi,
+  mapShotFromApi,
+} from './client';
 
 describe('API response mappers', () => {
   it('maps project fields from API snake_case into UI camelCase', () => {
@@ -70,6 +76,50 @@ describe('API response mappers', () => {
       shotType: 'wide',
       cameraMovement: 'static',
       position: { x: 100, y: 100 },
+    });
+  });
+
+  it('maps canvas node and edge fields from API snake_case into UI camelCase', () => {
+    expect(
+      mapCanvasNodeFromApi({
+        id: 'node-1',
+        project_id: 'project-1',
+        node_type: 'shot',
+        title: '镜头 1',
+        position: { x: 320, y: 180 },
+        size: { width: 200, height: 180 },
+        ref_type: 'shot',
+        ref_id: 'shot-1',
+        data: { shot_id: 'shot-1' },
+      }),
+    ).toEqual({
+      id: 'node-1',
+      projectId: 'project-1',
+      nodeType: 'shot',
+      title: '镜头 1',
+      position: { x: 320, y: 180 },
+      size: { width: 200, height: 180 },
+      refType: 'shot',
+      refId: 'shot-1',
+      data: { shot_id: 'shot-1' },
+    });
+
+    expect(
+      mapCanvasEdgeFromApi({
+        id: 'edge-1',
+        project_id: 'project-1',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        relation_type: 'workflow',
+        data: {},
+      }),
+    ).toEqual({
+      id: 'edge-1',
+      projectId: 'project-1',
+      sourceNodeId: 'node-1',
+      targetNodeId: 'node-2',
+      relationType: 'workflow',
+      data: {},
     });
   });
 });

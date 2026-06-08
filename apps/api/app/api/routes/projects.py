@@ -1,13 +1,21 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.canvas import CanvasEdge, CanvasNode
 from app.models.project import Project
 from app.models.script import Script
 from app.models.storyboard import Scene, Shot
+from app.schemas.canvas import (
+    CanvasEdgeCreate,
+    CanvasEdgeRead,
+    CanvasNodeCreate,
+    CanvasNodeRead,
+    CanvasNodeUpdate,
+)
 from app.schemas.project import ProjectCreate, ProjectRead
 from app.schemas.script import ScriptRead, ScriptUpsert
 from app.schemas.storyboard import (
@@ -148,6 +156,17 @@ def delete_project_scene(
 ) -> None:
     ensure_project_exists(project_id, db)
     scene = get_project_scene_or_404(project_id, scene_id, db)
+    shot_ids = list(
+        db.scalars(select(Shot.id).where(Shot.project_id == project_id, Shot.scene_id == scene_id))
+    )
+    if shot_ids:
+        db.execute(
+            delete(CanvasNode).where(
+                CanvasNode.project_id == project_id,
+                CanvasNode.ref_type == "shot",
+                CanvasNode.ref_id.in_(shot_ids),
+            )
+        )
     db.delete(scene)
     db.commit()
 
@@ -209,8 +228,107 @@ def delete_project_shot(
 ) -> None:
     ensure_project_exists(project_id, db)
     shot = get_project_shot_or_404(project_id, shot_id, db)
+    db.execute(
+        delete(CanvasNode).where(
+            CanvasNode.project_id == project_id,
+            CanvasNode.ref_type == "shot",
+            CanvasNode.ref_id == shot_id,
+        )
+    )
     db.delete(shot)
     db.commit()
+
+
+@router.get("/{project_id}/canvas/nodes", response_model=list[CanvasNodeRead])
+def list_project_canvas_nodes(project_id: UUID, db: Session = Depends(get_db)) -> list[dict]:
+    ensure_project_exists(project_id, db)
+    sync_shot_canvas_nodes(project_id, db)
+    nodes = db.scalars(
+        select(CanvasNode)
+        .where(CanvasNode.project_id == project_id)
+        .order_by(CanvasNode.created_at.asc(), CanvasNode.id.asc())
+    )
+    return [serialize_canvas_node(node) for node in nodes]
+
+
+@router.post("/{project_id}/canvas/nodes", response_model=CanvasNodeRead, status_code=201)
+def create_project_canvas_node(
+    project_id: UUID,
+    payload: CanvasNodeCreate,
+    db: Session = Depends(get_db),
+) -> dict:
+    ensure_project_exists(project_id, db)
+    node = CanvasNode(
+        project_id=project_id,
+        node_type=payload.node_type,
+        title=payload.title,
+        position_x=payload.position.x,
+        position_y=payload.position.y,
+        width=payload.size.width,
+        height=payload.size.height,
+        ref_type=payload.ref_type,
+        ref_id=payload.ref_id,
+        data=payload.data,
+    )
+    db.add(node)
+    db.commit()
+    db.refresh(node)
+    return serialize_canvas_node(node)
+
+
+@router.patch("/{project_id}/canvas/nodes/{node_id}", response_model=CanvasNodeRead)
+def update_project_canvas_node(
+    project_id: UUID,
+    node_id: UUID,
+    payload: CanvasNodeUpdate,
+    db: Session = Depends(get_db),
+) -> dict:
+    ensure_project_exists(project_id, db)
+    node = get_project_canvas_node_or_404(project_id, node_id, db)
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "title" in updates:
+        node.title = payload.title
+    if payload.position is not None:
+        node.position_x = payload.position.x
+        node.position_y = payload.position.y
+    if payload.size is not None:
+        node.width = payload.size.width
+        node.height = payload.size.height
+    if payload.data is not None:
+        node.data = payload.data
+
+    db.commit()
+    db.refresh(node)
+    return serialize_canvas_node(node)
+
+
+@router.get("/{project_id}/canvas/edges", response_model=list[CanvasEdgeRead])
+def list_project_canvas_edges(project_id: UUID, db: Session = Depends(get_db)) -> list[CanvasEdge]:
+    ensure_project_exists(project_id, db)
+    return list(
+        db.scalars(
+            select(CanvasEdge)
+            .where(CanvasEdge.project_id == project_id)
+            .order_by(CanvasEdge.created_at.asc(), CanvasEdge.id.asc())
+        )
+    )
+
+
+@router.post("/{project_id}/canvas/edges", response_model=CanvasEdgeRead, status_code=201)
+def create_project_canvas_edge(
+    project_id: UUID,
+    payload: CanvasEdgeCreate,
+    db: Session = Depends(get_db),
+) -> CanvasEdge:
+    ensure_project_exists(project_id, db)
+    get_project_canvas_node_or_404(project_id, payload.source_node_id, db)
+    get_project_canvas_node_or_404(project_id, payload.target_node_id, db)
+    edge = CanvasEdge(project_id=project_id, **payload.model_dump())
+    db.add(edge)
+    db.commit()
+    db.refresh(edge)
+    return edge
 
 
 def ensure_project_exists(project_id: UUID, db: Session) -> None:
@@ -234,3 +352,72 @@ def get_project_shot_or_404(project_id: UUID, shot_id: UUID, db: Session) -> Sho
     if shot is None or shot.project_id != project_id:
         raise HTTPException(status_code=404, detail="Shot not found")
     return shot
+
+
+def get_project_canvas_node_or_404(
+    project_id: UUID,
+    node_id: UUID,
+    db: Session,
+) -> CanvasNode:
+    node = db.get(CanvasNode, node_id)
+    if node is None or node.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Canvas node not found")
+    return node
+
+
+def sync_shot_canvas_nodes(project_id: UUID, db: Session) -> None:
+    existing_shot_node_refs = set(
+        db.scalars(
+            select(CanvasNode.ref_id).where(
+                CanvasNode.project_id == project_id,
+                CanvasNode.ref_type == "shot",
+            )
+        )
+    )
+    shots = db.scalars(
+        select(Shot)
+        .where(Shot.project_id == project_id)
+        .order_by(Shot.shot_number.asc(), Shot.id.asc())
+    )
+
+    has_new_nodes = False
+    for index, shot in enumerate(shots):
+        if shot.id in existing_shot_node_refs:
+            continue
+
+        position = shot.position or {
+            "x": 100 + (index % 5) * 250,
+            "y": 100 + (index // 5) * 200,
+        }
+        db.add(
+            CanvasNode(
+                project_id=project_id,
+                node_type="shot",
+                title=f"镜头 {shot.shot_number}",
+                position_x=float(position["x"]),
+                position_y=float(position["y"]),
+                width=200,
+                height=180,
+                ref_type="shot",
+                ref_id=shot.id,
+                data={"shot_id": str(shot.id), "scene_id": str(shot.scene_id)},
+            )
+        )
+        has_new_nodes = True
+
+    if has_new_nodes:
+        db.commit()
+
+
+def serialize_canvas_node(node: CanvasNode) -> dict:
+    return {
+        "id": node.id,
+        "project_id": node.project_id,
+        "node_type": node.node_type,
+        "title": node.title,
+        "position": {"x": node.position_x, "y": node.position_y},
+        "size": {"width": node.width, "height": node.height},
+        "ref_type": node.ref_type,
+        "ref_id": node.ref_id,
+        "data": node.data,
+    }

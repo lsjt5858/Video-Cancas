@@ -1,11 +1,22 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Project, Scene, Shot, Asset, Timeline, GenerationTask } from '../types';
+import {
+  Asset,
+  CanvasEdge,
+  CanvasNode,
+  GenerationTask,
+  Project,
+  Scene,
+  Shot,
+  Timeline,
+} from '../types';
 import * as api from '../api/client';
 
 interface AppContextType {
   projects: Project[];
   scenes: Scene[];
   shots: Shot[];
+  canvasNodes: CanvasNode[];
+  canvasEdges: CanvasEdge[];
   assets: Asset[];
   timelines: Timeline[];
   tasks: GenerationTask[];
@@ -30,6 +41,12 @@ interface AppContextType {
   deleteShot: (id: string) => Promise<void>;
   getShotsByProject: (projectId: string) => Shot[];
   getShotsByScene: (sceneId: string) => Shot[];
+
+  // Canvas methods
+  getCanvasNodesByProject: (projectId: string) => CanvasNode[];
+  getCanvasEdgesByProject: (projectId: string) => CanvasEdge[];
+  updateCanvasNode: (id: string, updates: Partial<CanvasNode>) => Promise<void>;
+  moveCanvasNodeLocally: (id: string, position: CanvasNode['position']) => void;
   
   // Asset methods
   createAsset: (asset: Omit<Asset, 'id' | 'createdAt'>) => Asset;
@@ -55,6 +72,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [shots, setShots] = useState<Shot[]>([]);
+  const [canvasNodes, setCanvasNodes] = useState<CanvasNode[]>([]);
+  const [canvasEdges, setCanvasEdges] = useState<CanvasEdge[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [tasks, setTasks] = useState<GenerationTask[]>([]);
@@ -114,6 +133,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProjects(prev => prev.filter(p => p.id !== id));
     setScenes(prev => prev.filter(s => s.projectId !== id));
     setShots(prev => prev.filter(s => s.projectId !== id));
+    setCanvasNodes(prev => prev.filter(node => node.projectId !== id));
+    setCanvasEdges(prev => prev.filter(edge => edge.projectId !== id));
     setAssets(prev => prev.filter(a => a.projectId !== id));
     setTimelines(prev => prev.filter(t => t.projectId !== id));
     setTasks(prev => prev.filter(t => t.projectId !== id));
@@ -139,6 +160,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     setScenes(prev => prev.filter(s => s.id !== id));
     setShots(prev => prev.filter(s => s.sceneId !== id));
+    setCanvasNodes(prev => prev.filter(node => node.data.scene_id !== id));
   };
 
   const getScenesByProject = (projectId: string) => 
@@ -148,6 +170,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const createShot = async (shot: Omit<Shot, 'id'>) => {
     const newShot = await api.createShot(shot);
     setShots(prev => [...prev, newShot]);
+    const projectCanvasNodes = await api.listCanvasNodes(shot.projectId);
+    setCanvasNodes(prev => [
+      ...prev.filter(node => node.projectId !== shot.projectId),
+      ...projectCanvasNodes,
+    ]);
     return newShot;
   };
 
@@ -167,6 +194,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await api.deleteShot(shot.projectId, id);
     }
     setShots(prev => prev.filter(s => s.id !== id));
+    setCanvasNodes(prev => prev.filter(node => node.refType !== 'shot' || node.refId !== id));
   };
 
   const getShotsByProject = (projectId: string) => 
@@ -174,6 +202,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getShotsByScene = (sceneId: string) => 
     shots.filter(s => s.sceneId === sceneId).sort((a, b) => a.shotNumber - b.shotNumber);
+
+  // Canvas methods
+  const getCanvasNodesByProject = (projectId: string) =>
+    canvasNodes.filter(node => node.projectId === projectId);
+
+  const getCanvasEdgesByProject = (projectId: string) =>
+    canvasEdges.filter(edge => edge.projectId === projectId);
+
+  const updateCanvasNode = async (id: string, updates: Partial<CanvasNode>) => {
+    const node = canvasNodes.find(canvasNode => canvasNode.id === id);
+    if (!node) return;
+    const updatedNode = await api.updateCanvasNode(node.projectId, id, updates);
+    setCanvasNodes(prev => prev.map(canvasNode => canvasNode.id === id ? updatedNode : canvasNode));
+  };
+
+  const moveCanvasNodeLocally = (id: string, position: CanvasNode['position']) => {
+    setCanvasNodes(prev => prev.map(node => node.id === id ? { ...node, position } : node));
+  };
 
   // Asset methods
   const createAsset = (asset: Omit<Asset, 'id' | 'createdAt'>) => {
@@ -241,10 +287,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadProjectData = async (projectId: string) => {
     try {
-      const [script, projectScenes, projectShots] = await Promise.all([
+      const [script, projectScenes, projectShots, projectCanvasNodes, projectCanvasEdges] =
+        await Promise.all([
         api.getProjectScript(projectId),
         api.listScenes(projectId),
         api.listShots(projectId),
+        api.listCanvasNodes(projectId),
+        api.listCanvasEdges(projectId),
       ]);
       setProjects(prev => prev.map(p => p.id === projectId ? { ...p, script } : p));
       setScenes(prev => [
@@ -254,6 +303,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setShots(prev => [
         ...prev.filter(shot => shot.projectId !== projectId),
         ...projectShots,
+      ]);
+      setCanvasNodes(prev => [
+        ...prev.filter(node => node.projectId !== projectId),
+        ...projectCanvasNodes,
+      ]);
+      setCanvasEdges(prev => [
+        ...prev.filter(edge => edge.projectId !== projectId),
+        ...projectCanvasEdges,
       ]);
     } catch (error) {
       console.error('Failed to load project data:', error);
@@ -265,6 +322,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       projects,
       scenes,
       shots,
+      canvasNodes,
+      canvasEdges,
       assets,
       timelines,
       tasks,
@@ -283,6 +342,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       deleteShot,
       getShotsByProject,
       getShotsByScene,
+      getCanvasNodesByProject,
+      getCanvasEdgesByProject,
+      updateCanvasNode,
+      moveCanvasNodeLocally,
       createAsset,
       deleteAsset,
       getAssetsByProject,

@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { ZoomIn, ZoomOut, Maximize2, Image, Video } from 'lucide-react';
-import { Shot } from '../types';
 
 interface CanvasViewProps {
   projectId: string;
@@ -17,31 +16,27 @@ interface CanvasState {
 }
 
 export default function CanvasView({ projectId }: CanvasViewProps) {
-  const { getShotsByProject, updateShot } = useApp();
+  const {
+    getCanvasNodesByProject,
+    getShotsByProject,
+    moveCanvasNodeLocally,
+    updateCanvasNode,
+  } = useApp();
   const shots = getShotsByProject(projectId);
-  const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
+  const nodes = getCanvasNodesByProject(projectId);
+  const shotNodes = nodes.filter(node => node.nodeType === 'shot' && node.refId);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [canvas, setCanvas] = useState<CanvasState>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [draggedShot, setDraggedShot] = useState<string | null>(null);
+  const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  const selectedShot = shots.find(s => s.id === selectedShotId);
-
-  // Initialize shot positions if not set
-  useEffect(() => {
-    shots.forEach((shot, index) => {
-      if (!shot.position) {
-        updateShot(shot.id, {
-          position: {
-            x: 100 + (index % 5) * 250,
-            y: 100 + Math.floor(index / 5) * 200,
-          },
-        });
-      }
-    });
-  }, [shots, updateShot]);
+  const selectedNode = nodes.find(node => node.id === selectedNodeId);
+  const selectedShot = selectedNode?.refId
+    ? shots.find(shot => shot.id === selectedNode.refId)
+    : undefined;
 
   const handleZoomIn = () => {
     setCanvas(prev => ({ ...prev, scale: Math.min(prev.scale + 0.1, 2) }));
@@ -55,20 +50,19 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     setCanvas({ scale: 1, offsetX: 0, offsetY: 0 });
   };
 
-  const handleMouseDown = (e: React.MouseEvent, shotId?: string) => {
-    if (shotId) {
-      // Start dragging shot
-      const shot = shots.find(s => s.id === shotId);
-      if (shot?.position) {
-        setDraggedShot(shotId);
-        setSelectedShotId(shotId);
+  const handleMouseDown = (e: React.MouseEvent, nodeId?: string) => {
+    if (nodeId) {
+      const node = nodes.find(canvasNode => canvasNode.id === nodeId);
+      if (node) {
+        setDraggedNode(nodeId);
+        setSelectedNodeId(nodeId);
         const rect = canvasRef.current?.getBoundingClientRect();
         if (rect) {
           const canvasX = (e.clientX - rect.left - canvas.offsetX) / canvas.scale;
           const canvasY = (e.clientY - rect.top - canvas.offsetY) / canvas.scale;
           setDragOffset({
-            x: canvasX - shot.position.x,
-            y: canvasY - shot.position.y,
+            x: canvasX - node.position.x,
+            y: canvasY - node.position.y,
           });
         }
       }
@@ -76,22 +70,19 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
       // Start panning canvas
       setIsPanning(true);
       setPanStart({ x: e.clientX - canvas.offsetX, y: e.clientY - canvas.offsetY });
-      setSelectedShotId(null);
+      setSelectedNodeId(null);
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggedShot) {
-      // Drag shot
+    if (draggedNode) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
         const canvasX = (e.clientX - rect.left - canvas.offsetX) / canvas.scale;
         const canvasY = (e.clientY - rect.top - canvas.offsetY) / canvas.scale;
-        updateShot(draggedShot, {
-          position: {
-            x: canvasX - dragOffset.x,
-            y: canvasY - dragOffset.y,
-          },
+        moveCanvasNodeLocally(draggedNode, {
+          x: canvasX - dragOffset.x,
+          y: canvasY - dragOffset.y,
         });
       }
     } else if (isPanning) {
@@ -105,8 +96,14 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   };
 
   const handleMouseUp = () => {
+    if (draggedNode) {
+      const node = nodes.find(canvasNode => canvasNode.id === draggedNode);
+      if (node) {
+        void updateCanvasNode(draggedNode, { position: node.position });
+      }
+    }
     setIsPanning(false);
-    setDraggedShot(null);
+    setDraggedNode(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -124,7 +121,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
       <div className="border-b bg-background px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {shots.length} 个镜头节点
+            {shotNodes.length} 个镜头节点
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -171,24 +168,27 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
           </svg>
 
           {/* Shot nodes */}
-          {shots.map((shot) => (
-            shot.position && (
+          {shotNodes.map((node) => {
+            const shot = shots.find(item => item.id === node.refId);
+            if (!shot) return null;
+
+            return (
               <div
-                key={shot.id}
+                key={node.id}
                 style={{
                   position: 'absolute',
-                  left: shot.position.x,
-                  top: shot.position.y,
+                  left: node.position.x,
+                  top: node.position.y,
                 }}
                 onMouseDown={(e) => {
                   e.stopPropagation();
-                  handleMouseDown(e, shot.id);
+                  handleMouseDown(e, node.id);
                 }}
                 className="cursor-move"
               >
                 <Card
                   className={`w-[200px] p-3 shadow-md hover:shadow-lg transition-shadow ${
-                    selectedShotId === shot.id ? 'ring-2 ring-primary' : ''
+                    selectedNodeId === node.id ? 'ring-2 ring-primary' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
@@ -217,8 +217,8 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
                   )}
                 </Card>
               </div>
-            )
-          ))}
+            );
+          })}
         </div>
       </div>
 

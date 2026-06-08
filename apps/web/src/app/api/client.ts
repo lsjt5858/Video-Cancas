@@ -1,4 +1,4 @@
-import { Project, Scene, Shot } from '../types';
+import { CanvasEdge, CanvasNode, Project, Scene, Shot } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -49,6 +49,27 @@ type ApiShot = {
   position: Shot['position'] | null;
 };
 
+type ApiCanvasNode = {
+  id: string;
+  project_id: string;
+  node_type: CanvasNode['nodeType'];
+  title: string | null;
+  position: CanvasNode['position'];
+  size: CanvasNode['size'];
+  ref_type: string | null;
+  ref_id: string | null;
+  data: Record<string, unknown>;
+};
+
+type ApiCanvasEdge = {
+  id: string;
+  project_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  relation_type: string;
+  data: Record<string, unknown>;
+};
+
 type ApiProjectCreate = {
   name: string;
   type: string;
@@ -80,6 +101,13 @@ type ApiShotCreate = {
 };
 
 type ApiShotUpdate = Partial<ApiShotCreate>;
+
+type ApiCanvasNodeUpdate = {
+  title?: string;
+  position?: CanvasNode['position'];
+  size?: CanvasNode['size'];
+  data?: Record<string, unknown>;
+};
 
 export type ProjectCreateInput = Omit<Project, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -123,6 +151,31 @@ export function mapShotFromApi(shot: ApiShot): Shot {
     imageUrl: shot.image_url ?? undefined,
     videoUrl: shot.video_url ?? undefined,
     position: shot.position ?? undefined,
+  };
+}
+
+export function mapCanvasNodeFromApi(node: ApiCanvasNode): CanvasNode {
+  return {
+    id: node.id,
+    projectId: node.project_id,
+    nodeType: node.node_type,
+    title: node.title ?? undefined,
+    position: node.position,
+    size: node.size,
+    refType: node.ref_type ?? undefined,
+    refId: node.ref_id ?? undefined,
+    data: node.data,
+  };
+}
+
+export function mapCanvasEdgeFromApi(edge: ApiCanvasEdge): CanvasEdge {
+  return {
+    id: edge.id,
+    projectId: edge.project_id,
+    sourceNodeId: edge.source_node_id,
+    targetNodeId: edge.target_node_id,
+    relationType: edge.relation_type,
+    data: edge.data,
   };
 }
 
@@ -209,6 +262,28 @@ export async function deleteShot(projectId: string, shotId: string): Promise<voi
   await apiFetch<void>(`/projects/${projectId}/shots/${shotId}`, { method: 'DELETE' });
 }
 
+export async function listCanvasNodes(projectId: string): Promise<CanvasNode[]> {
+  const nodes = await apiFetch<ApiCanvasNode[]>(`/projects/${projectId}/canvas/nodes`);
+  return nodes.map(mapCanvasNodeFromApi);
+}
+
+export async function updateCanvasNode(
+  projectId: string,
+  nodeId: string,
+  updates: Partial<Pick<CanvasNode, 'title' | 'position' | 'size' | 'data'>>,
+): Promise<CanvasNode> {
+  const node = await apiFetch<ApiCanvasNode>(`/projects/${projectId}/canvas/nodes/${nodeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(mapCanvasNodeUpdateToApi(updates)),
+  });
+  return mapCanvasNodeFromApi(node);
+}
+
+export async function listCanvasEdges(projectId: string): Promise<CanvasEdge[]> {
+  const edges = await apiFetch<ApiCanvasEdge[]>(`/projects/${projectId}/canvas/edges`);
+  return edges.map(mapCanvasEdgeFromApi);
+}
+
 function mapProjectCreateToApi(input: ProjectCreateInput): ApiProjectCreate {
   return {
     name: input.name,
@@ -258,6 +333,17 @@ function mapShotUpdateToApi(updates: Partial<Shot>): ApiShotUpdate {
   if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl;
   if (updates.videoUrl !== undefined) payload.video_url = updates.videoUrl;
   if (updates.position !== undefined) payload.position = updates.position;
+  return payload;
+}
+
+function mapCanvasNodeUpdateToApi(
+  updates: Partial<Pick<CanvasNode, 'title' | 'position' | 'size' | 'data'>>,
+): ApiCanvasNodeUpdate {
+  const payload: ApiCanvasNodeUpdate = {};
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.position !== undefined) payload.position = updates.position;
+  if (updates.size !== undefined) payload.size = updates.size;
+  if (updates.data !== undefined) payload.data = updates.data;
   return payload;
 }
 
