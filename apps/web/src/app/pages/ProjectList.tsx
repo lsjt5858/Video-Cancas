@@ -9,11 +9,13 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Plus, Film, Trash2, Clock } from 'lucide-react';
 import { Project } from '../types';
+import { toast } from 'sonner';
 
 export default function ProjectList() {
   const navigate = useNavigate();
-  const { projects, createProject, deleteProject } = useApp();
+  const { projects, isLoadingProjects, createProject, deleteProject } = useApp();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newProject, setNewProject] = useState({
     name: '',
     type: 'short-drama' as Project['type'],
@@ -22,25 +24,37 @@ export default function ProjectList() {
     script: '',
   });
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!newProject.name.trim()) return;
-    
-    const project = createProject(newProject);
-    setIsCreateDialogOpen(false);
-    setNewProject({
-      name: '',
-      type: 'short-drama',
-      aspectRatio: '16:9',
-      targetDuration: 60,
-      script: '',
-    });
-    navigate(`/project/${project.id}`);
+
+    setIsSubmitting(true);
+    try {
+      const project = await createProject(newProject);
+      setIsCreateDialogOpen(false);
+      setNewProject({
+        name: '',
+        type: 'short-drama',
+        aspectRatio: '16:9',
+        targetDuration: 60,
+        script: '',
+      });
+      navigate(`/project/${project.id}`);
+    } catch (error) {
+      toast.error('创建项目失败');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteProject = (e: React.MouseEvent, projectId: string) => {
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
     if (confirm('确定要删除这个项目吗？此操作无法撤销。')) {
-      deleteProject(projectId);
+      try {
+        await deleteProject(projectId);
+        toast.success('项目已删除');
+      } catch (error) {
+        toast.error('删除项目失败');
+      }
     }
   };
 
@@ -144,15 +158,21 @@ export default function ProjectList() {
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   取消
                 </Button>
-                <Button onClick={handleCreateProject} disabled={!newProject.name.trim()}>
-                  创建项目
+                <Button onClick={handleCreateProject} disabled={!newProject.name.trim() || isSubmitting}>
+                  {isSubmitting ? '创建中...' : '创建项目'}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
 
-        {projects.length === 0 ? (
+        {isLoadingProjects ? (
+          <Card className="py-16">
+            <CardContent className="text-center text-muted-foreground">
+              正在加载项目...
+            </CardContent>
+          </Card>
+        ) : projects.length === 0 ? (
           <Card className="py-16">
             <CardContent className="flex flex-col items-center justify-center text-center">
               <div className="rounded-full bg-gray-100 p-6 mb-4">

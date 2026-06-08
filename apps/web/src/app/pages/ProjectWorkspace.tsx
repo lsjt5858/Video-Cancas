@@ -15,17 +15,23 @@ import { toast } from 'sonner';
 export default function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { getProject, updateProject } = useApp();
+  const { getProject, isLoadingProjects, loadProjectData } = useApp();
   const [activeTab, setActiveTab] = useState('script');
   
   const project = projectId ? getProject(projectId) : undefined;
 
   useEffect(() => {
-    if (!project) {
+    if (!project && !isLoadingProjects) {
       toast.error('项目不存在');
       navigate('/');
     }
-  }, [project, navigate]);
+  }, [project, isLoadingProjects, navigate]);
+
+  useEffect(() => {
+    if (projectId && project) {
+      void loadProjectData(projectId);
+    }
+  }, [projectId, project?.id]);
 
   if (!project) {
     return null;

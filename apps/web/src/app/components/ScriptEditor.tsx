@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -27,12 +27,24 @@ export default function ScriptEditor({ projectId, onGenerated }: ScriptEditorPro
   const shots = getShotsByProject(projectId);
   const [script, setScript] = useState(project?.script || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const generationInFlightRef = useRef(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    setScript(project?.script || '');
+  }, [project?.script]);
+
+  const handleSave = async () => {
     if (project) {
-      updateProject(project.id, { script });
-      toast.success('剧本已保存');
+      setIsSaving(true);
+      try {
+        await updateProject(project.id, { script });
+        toast.success('剧本已保存');
+      } catch (error) {
+        toast.error('保存剧本失败');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -55,21 +67,21 @@ export default function ScriptEditor({ projectId, onGenerated }: ScriptEditorPro
     try {
       // Save script first
       if (project) {
-        updateProject(project.id, { script });
+        await updateProject(project.id, { script });
       }
 
-      getScenesByProject(projectId).forEach((scene) => deleteScene(scene.id));
-      getShotsByProject(projectId).forEach((shot) => deleteShot(shot.id));
+      await Promise.all(getShotsByProject(projectId).map((shot) => deleteShot(shot.id)));
+      await Promise.all(getScenesByProject(projectId).map((scene) => deleteScene(scene.id)));
 
       const plan = createStoryboardGenerationPlan(projectId);
-      const mockScene = createScene(plan.scene);
+      const mockScene = await createScene(plan.scene);
 
-      plan.shots.forEach((shot) => {
-        createShot({
+      await Promise.all(
+        plan.shots.map((shot) => createShot({
           sceneId: mockScene.id,
           ...shot,
-        });
-      });
+        })),
+      );
 
       toast.success(`已生成 ${plan.shots.length} 个分镜`);
       onGenerated?.(plan.targetTab);
@@ -114,9 +126,9 @@ export default function ScriptEditor({ projectId, onGenerated }: ScriptEditorPro
           </Card>
 
           <div className="flex gap-3">
-            <Button onClick={handleSave} variant="outline">
+            <Button onClick={handleSave} variant="outline" disabled={isSaving}>
               <FileText className="mr-2 size-4" />
-              保存剧本
+              {isSaving ? '保存中...' : '保存剧本'}
             </Button>
             <Button 
               onClick={handleGenerateShots}

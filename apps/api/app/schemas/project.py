@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,3 +22,5 @@ class ProjectRead(BaseModel):
     aspect_ratio: str
     target_duration: int | None
     status: str
+    created_at: datetime
+    updated_at: datetime

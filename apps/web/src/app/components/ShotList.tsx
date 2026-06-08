@@ -30,18 +30,26 @@ export default function ShotList({ projectId }: ShotListProps) {
     setIsEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (selectedShot && editForm) {
-      updateShot(selectedShot.id, editForm);
-      toast.success('分镜已更新');
-      setIsEditDialogOpen(false);
+      try {
+        await updateShot(selectedShot.id, editForm);
+        toast.success('分镜已更新');
+        setIsEditDialogOpen(false);
+      } catch (error) {
+        toast.error('更新分镜失败');
+      }
     }
   };
 
-  const handleDelete = (shotId: string) => {
+  const handleDelete = async (shotId: string) => {
     if (confirm('确定要删除这个分镜吗？')) {
-      deleteShot(shotId);
-      toast.success('分镜已删除');
+      try {
+        await deleteShot(shotId);
+        toast.success('分镜已删除');
+      } catch (error) {
+        toast.error('删除分镜失败');
+      }
     }
   };
 
@@ -76,9 +84,9 @@ export default function ShotList({ projectId }: ShotListProps) {
       });
 
       // Update shot with image
-      updateShot(shot.id, { imageUrl: asset.url });
-
-      toast.success('图片生成成功', { id: task.id });
+      void updateShot(shot.id, { imageUrl: asset.url })
+        .then(() => toast.success('图片生成成功', { id: task.id }))
+        .catch(() => toast.error('图片回写失败', { id: task.id }));
     }, 2000);
   };
 
@@ -119,9 +127,9 @@ export default function ShotList({ projectId }: ShotListProps) {
       });
 
       // Update shot with video
-      updateShot(shot.id, { videoUrl: asset.url });
-
-      toast.success('视频生成成功', { id: task.id });
+      void updateShot(shot.id, { videoUrl: asset.url })
+        .then(() => toast.success('视频生成成功', { id: task.id }))
+        .catch(() => toast.error('视频回写失败', { id: task.id }));
     }, 3000);
   };
 

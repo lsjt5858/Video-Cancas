@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Project, Scene, Shot, Asset, Timeline, GenerationTask } from '../types';
+import * as api from '../api/client';
 
 interface AppContextType {
   projects: Project[];
@@ -8,23 +9,25 @@ interface AppContextType {
   assets: Asset[];
   timelines: Timeline[];
   tasks: GenerationTask[];
+  isLoadingProjects: boolean;
+  loadProjectData: (projectId: string) => Promise<void>;
   
   // Project methods
-  createProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Project;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
+  createProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Project>;
+  updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
   getProject: (id: string) => Project | undefined;
   
   // Scene methods
-  createScene: (scene: Omit<Scene, 'id'>) => Scene;
-  updateScene: (id: string, updates: Partial<Scene>) => void;
-  deleteScene: (id: string) => void;
+  createScene: (scene: Omit<Scene, 'id'>) => Promise<Scene>;
+  updateScene: (id: string, updates: Partial<Scene>) => Promise<void>;
+  deleteScene: (id: string) => Promise<void>;
   getScenesByProject: (projectId: string) => Scene[];
   
   // Shot methods
-  createShot: (shot: Omit<Shot, 'id'>) => Shot;
-  updateShot: (id: string, updates: Partial<Shot>) => void;
-  deleteShot: (id: string) => void;
+  createShot: (shot: Omit<Shot, 'id'>) => Promise<Shot>;
+  updateShot: (id: string, updates: Partial<Shot>) => Promise<void>;
+  deleteShot: (id: string) => Promise<void>;
   getShotsByProject: (projectId: string) => Shot[];
   getShotsByScene: (sceneId: string) => Shot[];
   
@@ -55,16 +58,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [tasks, setTasks] = useState<GenerationTask[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
-  // Load from localStorage on mount
+  // Load API-backed project list on mount.
+  useEffect(() => {
+    void refreshProjects();
+  }, []);
+
+  // Load local prototype-only data on mount.
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        setProjects(data.projects || []);
-        setScenes(data.scenes || []);
-        setShots(data.shots || []);
         setAssets(data.assets || []);
         setTimelines(data.timelines || []);
         setTasks(data.tasks || []);
@@ -74,13 +80,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Save to localStorage whenever data changes
+  // Save prototype-only data to localStorage whenever it changes.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        projects,
-        scenes,
-        shots,
         assets,
         timelines,
         tasks,
@@ -88,27 +91,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Failed to save data:', error);
     }
-  }, [projects, scenes, shots, assets, timelines, tasks]);
+  }, [assets, timelines, tasks]);
 
   // Project methods
-  const createProject = (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newProject: Project = {
-      ...project,
-      id: generateId(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+  const createProject = async (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newProject = await api.createProject(project);
     setProjects(prev => [...prev, newProject]);
     return newProject;
   };
 
-  const updateProject = (id: string, updates: Partial<Project>) => {
+  const updateProject = async (id: string, updates: Partial<Project>) => {
+    if (updates.script !== undefined) {
+      await api.saveProjectScript(id, updates.script);
+    }
     setProjects(prev => prev.map(p => 
       p.id === id ? { ...p, ...updates, updatedAt: Date.now() } : p
     ));
   };
 
-  const deleteProject = (id: string) => {
+  const deleteProject = async (id: string) => {
+    await api.deleteProject(id);
     setProjects(prev => prev.filter(p => p.id !== id));
     setScenes(prev => prev.filter(s => s.projectId !== id));
     setShots(prev => prev.filter(s => s.projectId !== id));
@@ -120,20 +122,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getProject = (id: string) => projects.find(p => p.id === id);
 
   // Scene methods
-  const createScene = (scene: Omit<Scene, 'id'>) => {
-    const newScene: Scene = {
-      ...scene,
-      id: generateId(),
-    };
+  const createScene = async (scene: Omit<Scene, 'id'>) => {
+    const newScene = await api.createScene(scene);
     setScenes(prev => [...prev, newScene]);
     return newScene;
   };
 
-  const updateScene = (id: string, updates: Partial<Scene>) => {
+  const updateScene = async (id: string, updates: Partial<Scene>) => {
     setScenes(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
-  const deleteScene = (id: string) => {
+  const deleteScene = async (id: string) => {
+    const scene = scenes.find(s => s.id === id);
+    if (scene) {
+      await api.deleteScene(scene.projectId, id);
+    }
     setScenes(prev => prev.filter(s => s.id !== id));
     setShots(prev => prev.filter(s => s.sceneId !== id));
   };
@@ -142,20 +145,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     scenes.filter(s => s.projectId === projectId).sort((a, b) => a.sceneNumber - b.sceneNumber);
 
   // Shot methods
-  const createShot = (shot: Omit<Shot, 'id'>) => {
-    const newShot: Shot = {
-      ...shot,
-      id: generateId(),
-    };
+  const createShot = async (shot: Omit<Shot, 'id'>) => {
+    const newShot = await api.createShot(shot);
     setShots(prev => [...prev, newShot]);
     return newShot;
   };
 
-  const updateShot = (id: string, updates: Partial<Shot>) => {
+  const updateShot = async (id: string, updates: Partial<Shot>) => {
+    const shot = shots.find(s => s.id === id);
+    if (shot) {
+      const updatedShot = await api.updateShot(shot.projectId, id, updates);
+      setShots(prev => prev.map(s => s.id === id ? updatedShot : s));
+      return;
+    }
     setShots(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
-  const deleteShot = (id: string) => {
+  const deleteShot = async (id: string) => {
+    const shot = shots.find(s => s.id === id);
+    if (shot) {
+      await api.deleteShot(shot.projectId, id);
+    }
     setShots(prev => prev.filter(s => s.id !== id));
   };
 
@@ -219,6 +229,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getTasksByProject = (projectId: string) => 
     tasks.filter(t => t.projectId === projectId).sort((a, b) => b.createdAt - a.createdAt);
 
+  async function refreshProjects() {
+    try {
+      setProjects(await api.listProjects());
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }
+
+  const loadProjectData = async (projectId: string) => {
+    try {
+      const [script, projectScenes, projectShots] = await Promise.all([
+        api.getProjectScript(projectId),
+        api.listScenes(projectId),
+        api.listShots(projectId),
+      ]);
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, script } : p));
+      setScenes(prev => [
+        ...prev.filter(scene => scene.projectId !== projectId),
+        ...projectScenes,
+      ]);
+      setShots(prev => [
+        ...prev.filter(shot => shot.projectId !== projectId),
+        ...projectShots,
+      ]);
+    } catch (error) {
+      console.error('Failed to load project data:', error);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       projects,
@@ -227,6 +268,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       assets,
       timelines,
       tasks,
+      isLoadingProjects,
+      loadProjectData,
       createProject,
       updateProject,
       deleteProject,

@@ -51,6 +51,15 @@ def get_project(project_id: UUID, db: Session = Depends(get_db)) -> Project:
     return project
 
 
+@router.delete("/{project_id}", status_code=204)
+def delete_project(project_id: UUID, db: Session = Depends(get_db)) -> None:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    db.delete(project)
+    db.commit()
+
+
 @router.get("/{project_id}/script", response_model=ScriptRead)
 def get_project_script(project_id: UUID, db: Session = Depends(get_db)) -> Script:
     ensure_project_exists(project_id, db)

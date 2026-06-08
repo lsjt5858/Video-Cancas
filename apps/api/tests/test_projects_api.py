@@ -65,3 +65,27 @@ def test_get_project_returns_404_for_missing_project() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
+
+
+def test_delete_project_removes_project() -> None:
+    client = TestClient(app)
+    project_name = f"pytest-project-api-{uuid4()}"
+
+    create_response = client.post(
+        "/api/projects",
+        json={
+            "name": project_name,
+            "type": "short_drama",
+            "style": "realistic_cinematic",
+            "aspect_ratio": "9:16",
+            "target_duration": 90,
+        },
+    )
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
+
+    delete_response = client.delete(f"/api/projects/{project_id}")
+    detail_response = client.get(f"/api/projects/{project_id}")
+
+    assert delete_response.status_code == 204
+    assert detail_response.status_code == 404
