@@ -18,11 +18,19 @@ import {
 } from 'lucide-react';
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
 import { searchCanvasNodes } from '../lib/canvasSearch';
-import { calculateFitView, calculateFocusedView } from '../lib/canvasViewport';
+import {
+  calculateCenteredView,
+  calculateFitView,
+  calculateFocusedView,
+  calculateMiniMapLayout,
+  MiniMapLayout,
+} from '../lib/canvasViewport';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
   projectId: string;
+  selectedNodeId: string | null;
+  onSelectedNodeIdChange: (nodeId: string | null) => void;
 }
 
 interface CanvasState {
@@ -31,7 +39,13 @@ interface CanvasState {
   offsetY: number;
 }
 
-export default function CanvasView({ projectId }: CanvasViewProps) {
+const MINI_MAP_SIZE = { width: 180, height: 120 };
+
+export default function CanvasView({
+  projectId,
+  selectedNodeId,
+  onSelectedNodeIdChange,
+}: CanvasViewProps) {
   const {
     getCanvasNodesByProject,
     getCanvasEdgesByProject,
@@ -45,7 +59,6 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const shots = getShotsByProject(projectId);
   const nodes = getCanvasNodesByProject(projectId);
   const edges = getCanvasEdgesByProject(projectId);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [canvas, setCanvas] = useState<CanvasState>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -54,6 +67,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const selectedNode = nodes.find(node => node.id === selectedNodeId);
@@ -66,6 +80,10 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const searchResults = useMemo(
     () => searchCanvasNodes(searchQuery, nodes, scenes, shots),
     [searchQuery, nodes, scenes, shots],
+  );
+  const miniMapLayout = useMemo(
+    () => calculateMiniMapLayout(nodes, MINI_MAP_SIZE),
+    [nodes],
   );
 
   const handleZoomIn = () => {
@@ -90,9 +108,29 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    setSelectedNodeId(node.id);
+    onSelectedNodeIdChange(node.id);
     setCanvas(calculateFocusedView(node, { width: rect.width, height: rect.height }, canvas.scale));
     setSearchQuery('');
+  };
+
+  const handleMiniMapClick = (
+    event: React.MouseEvent<SVGSVGElement>,
+    layout: MiniMapLayout,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const miniX = event.clientX - rect.left;
+    const miniY = event.clientY - rect.top;
+    const worldX = (miniX - layout.offsetX) / layout.scale + layout.bounds.minX;
+    const worldY = (miniY - layout.offsetY) / layout.scale + layout.bounds.minY;
+
+    setCanvas(calculateCenteredView(
+      { x: worldX, y: worldY },
+      viewportSize,
+      canvas.scale,
+    ));
   };
 
   useEffect(() => {
@@ -120,6 +158,18 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [nodes]);
 
+  useEffect(() => {
+    const syncViewportSize = () => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setViewportSize({ width: rect.width, height: rect.height });
+    };
+
+    syncViewportSize();
+    window.addEventListener('resize', syncViewportSize);
+    return () => window.removeEventListener('resize', syncViewportSize);
+  }, []);
+
   const handleMouseDown = (e: React.MouseEvent, nodeId?: string) => {
     if (connectingFromNodeId) {
       return;
@@ -129,7 +179,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
       const node = nodes.find(canvasNode => canvasNode.id === nodeId);
       if (node) {
         setDraggedNode(nodeId);
-        setSelectedNodeId(nodeId);
+        onSelectedNodeIdChange(nodeId);
         const rect = canvasRef.current?.getBoundingClientRect();
         if (rect) {
           const canvasX = (e.clientX - rect.left - canvas.offsetX) / canvas.scale;
@@ -144,7 +194,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
       // Start panning canvas
       setIsPanning(true);
       setPanStart({ x: e.clientX - canvas.offsetX, y: e.clientY - canvas.offsetY });
-      setSelectedNodeId(null);
+      onSelectedNodeIdChange(null);
     }
   };
 
@@ -193,7 +243,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     e.stopPropagation();
     const node = nodes.find(canvasNode => canvasNode.id === nodeId);
     if (!node) return;
-    setSelectedNodeId(nodeId);
+    onSelectedNodeIdChange(nodeId);
     setConnectingFromNodeId(nodeId);
     setConnectionPointer({
       x: node.position.x + node.size.width,
@@ -313,6 +363,16 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
             <RotateCcw className="size-4" />
           </Button>
         </div>
+        {miniMapLayout && viewportSize.width > 0 && viewportSize.height > 0 && (
+          <CanvasMiniMap
+            nodes={nodes}
+            selectedNodeId={selectedNodeId}
+            canvas={canvas}
+            viewportSize={viewportSize}
+            layout={miniMapLayout}
+            onClick={handleMiniMapClick}
+          />
+        )}
       </div>
 
       {/* Canvas */}
@@ -435,6 +495,94 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CanvasMiniMap({
+  nodes,
+  selectedNodeId,
+  canvas,
+  viewportSize,
+  layout,
+  onClick,
+}: {
+  nodes: CanvasNode[];
+  selectedNodeId: string | null;
+  canvas: CanvasState;
+  viewportSize: { width: number; height: number };
+  layout: MiniMapLayout;
+  onClick: (event: React.MouseEvent<SVGSVGElement>, layout: MiniMapLayout) => void;
+}) {
+  const viewWorldRect = {
+    x: -canvas.offsetX / canvas.scale,
+    y: -canvas.offsetY / canvas.scale,
+    width: viewportSize.width / canvas.scale,
+    height: viewportSize.height / canvas.scale,
+  };
+  const viewMiniRect = {
+    x: (viewWorldRect.x - layout.bounds.minX) * layout.scale + layout.offsetX,
+    y: (viewWorldRect.y - layout.bounds.minY) * layout.scale + layout.offsetY,
+    width: viewWorldRect.width * layout.scale,
+    height: viewWorldRect.height * layout.scale,
+  };
+
+  return (
+    <div
+      className="absolute bottom-4 right-4 z-10 rounded-lg border bg-background/95 p-2 shadow-lg backdrop-blur"
+      onMouseDown={(event) => event.stopPropagation()}
+      onMouseMove={(event) => event.stopPropagation()}
+      onMouseUp={(event) => event.stopPropagation()}
+      onWheel={(event) => event.stopPropagation()}
+    >
+      <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>小地图</span>
+        <span>{nodes.length} 节点</span>
+      </div>
+      <svg
+        width={layout.width}
+        height={layout.height}
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        className="block cursor-crosshair rounded bg-muted/40"
+        onClick={(event) => onClick(event, layout)}
+      >
+        <rect
+          x="0"
+          y="0"
+          width={layout.width}
+          height={layout.height}
+          fill="transparent"
+        />
+        {nodes.map(node => {
+          const x = (node.position.x - layout.bounds.minX) * layout.scale + layout.offsetX;
+          const y = (node.position.y - layout.bounds.minY) * layout.scale + layout.offsetY;
+          const width = Math.max(node.size.width * layout.scale, 3);
+          const height = Math.max(node.size.height * layout.scale, 3);
+          const isSelected = node.id === selectedNodeId;
+
+          return (
+            <rect
+              key={node.id}
+              x={x}
+              y={y}
+              width={width}
+              height={height}
+              rx="2"
+              className={isSelected ? 'fill-primary' : 'fill-muted-foreground/50'}
+            />
+          );
+        })}
+        <rect
+          x={viewMiniRect.x}
+          y={viewMiniRect.y}
+          width={viewMiniRect.width}
+          height={viewMiniRect.height}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="text-primary"
+        />
+      </svg>
     </div>
   );
 }

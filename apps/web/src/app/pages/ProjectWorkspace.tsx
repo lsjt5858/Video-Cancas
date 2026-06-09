@@ -1,24 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../components/ui/resizable';
+import { Separator } from '../components/ui/separator';
 import { ArrowLeft, Save } from 'lucide-react';
 import ScriptEditor from '../components/ScriptEditor';
 import ShotList from '../components/ShotList';
 import CanvasView from '../components/CanvasView';
 import AssetLibrary from '../components/AssetLibrary';
 import TimelineView from '../components/TimelineView';
+import { getCanvasNodeDetails } from '../lib/canvasNodeDetails';
 import { toast } from 'sonner';
 
 export default function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { getProject, isLoadingProjects, loadProjectData } = useApp();
+  const {
+    getProject,
+    isLoadingProjects,
+    loadProjectData,
+    getCanvasNodesByProject,
+    getScenesByProject,
+    getShotsByProject,
+  } = useApp();
   const [activeTab, setActiveTab] = useState('script');
+  const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
   
   const project = projectId ? getProject(projectId) : undefined;
+  const canvasNodes = project ? getCanvasNodesByProject(project.id) : [];
+  const scenes = project ? getScenesByProject(project.id) : [];
+  const shots = project ? getShotsByProject(project.id) : [];
+  const selectedCanvasNode = canvasNodes.find(node => node.id === selectedCanvasNodeId);
+  const selectedCanvasNodeDetails = useMemo(
+    () => selectedCanvasNode ? getCanvasNodeDetails(selectedCanvasNode, scenes, shots) : null,
+    [selectedCanvasNode, scenes, shots],
+  );
 
   useEffect(() => {
     if (!project && !isLoadingProjects) {
@@ -93,16 +112,15 @@ export default function ProjectWorkspace() {
             <TabsContent value="canvas" className="h-full m-0">
               <ResizablePanelGroup direction="horizontal">
                 <ResizablePanel defaultSize={75} minSize={50}>
-                  <CanvasView projectId={project.id} />
+                  <CanvasView
+                    projectId={project.id}
+                    selectedNodeId={selectedCanvasNodeId}
+                    onSelectedNodeIdChange={setSelectedCanvasNodeId}
+                  />
                 </ResizablePanel>
                 <ResizableHandle />
                 <ResizablePanel defaultSize={25} minSize={20}>
-                  <div className="h-full border-l bg-muted/20 p-4">
-                    <h3 className="font-semibold mb-4">属性面板</h3>
-                    <p className="text-sm text-muted-foreground">
-                      选择画布中的节点查看详情
-                    </p>
-                  </div>
+                  <CanvasNodeInspector details={selectedCanvasNodeDetails} />
                 </ResizablePanel>
               </ResizablePanelGroup>
             </TabsContent>
@@ -116,6 +134,46 @@ export default function ProjectWorkspace() {
             </TabsContent>
           </div>
         </Tabs>
+      </div>
+    </div>
+  );
+}
+
+function CanvasNodeInspector({
+  details,
+}: {
+  details: ReturnType<typeof getCanvasNodeDetails> | null;
+}) {
+  if (!details) {
+    return (
+      <div className="h-full border-l bg-muted/20 p-4">
+        <h3 className="font-semibold mb-4">属性面板</h3>
+        <p className="text-sm text-muted-foreground">
+          选择画布中的节点查看详情
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-auto border-l bg-muted/20 p-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold leading-snug">{details.title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{details.description}</p>
+        </div>
+        <Badge variant="outline" className="shrink-0">{details.typeLabel}</Badge>
+      </div>
+
+      <Separator className="mb-4" />
+
+      <div className="space-y-3">
+        {details.rows.map(row => (
+          <div key={row.label} className="rounded-md border bg-background p-3">
+            <div className="text-xs text-muted-foreground">{row.label}</div>
+            <div className="mt-1 break-words text-sm">{row.value}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
