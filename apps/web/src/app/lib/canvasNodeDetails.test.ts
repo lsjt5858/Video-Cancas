@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCanvasNodeDetails } from './canvasNodeDetails';
+import { buildCanvasNodeDialogDetails, getCanvasNodeDetails } from './canvasNodeDetails';
 import { CanvasNode, Scene, Shot } from '../types';
 
 const scene: Scene = {
@@ -23,6 +23,7 @@ const shot: Shot = {
   duration: 4,
   dialogue: '妈妈，我回来了。',
   prompt: 'A child walks through the crowd at an old station',
+  imageUrl: 'https://example.com/image.png',
 };
 
 function makeNode(
@@ -80,6 +81,49 @@ describe('canvas node details', () => {
         { label: '节点 ID', value: 'script-node' },
         { label: '位置', value: '640, 80' },
         { label: '尺寸', value: '200 x 180' },
+      ]),
+    });
+  });
+
+  it('builds dialog sections for a shot node', () => {
+    expect(buildCanvasNodeDialogDetails(makeNode('shot', shot.id), [scene], [shot])).toMatchObject({
+      title: '镜头 2: 孩子穿过人群',
+      typeLabel: '镜头',
+      sections: expect.arrayContaining([
+        {
+          title: '镜头内容',
+          rows: [
+            { label: '镜头描述', value: '孩子穿过人群' },
+            { label: '提示词', value: 'A child walks through the crowd at an old station' },
+            { label: '台词', value: '妈妈，我回来了。' },
+          ],
+        },
+        {
+          title: '生成结果',
+          rows: [
+            { label: '图片结果', value: 'https://example.com/image.png' },
+            { label: '视频结果', value: '未生成' },
+          ],
+        },
+      ]),
+      footerNote: '生成历史和候选结果待接入。',
+    });
+  });
+
+  it('builds dialog sections for a scene node', () => {
+    expect(buildCanvasNodeDialogDetails(makeNode('scene', scene.id), [scene], [shot])).toMatchObject({
+      title: '场景 1: 母亲等待',
+      typeLabel: '场景',
+      sections: expect.arrayContaining([
+        {
+          title: '场景内容',
+          rows: [
+            { label: '场景描述', value: '母亲等待' },
+            { label: '地点', value: '旧车站' },
+            { label: '时间', value: '黄昏' },
+            { label: '角色', value: '母亲、孩子' },
+          ],
+        },
       ]),
     });
   });

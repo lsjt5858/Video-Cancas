@@ -4,6 +4,20 @@ import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../components/ui/resizable';
 import { Separator } from '../components/ui/separator';
@@ -14,8 +28,13 @@ import ShotList from '../components/ShotList';
 import CanvasView from '../components/CanvasView';
 import AssetLibrary from '../components/AssetLibrary';
 import TimelineView from '../components/TimelineView';
-import { getCanvasNodeDetails } from '../lib/canvasNodeDetails';
-import { Scene } from '../types';
+import {
+  buildCanvasNodeDialogDetails,
+  CanvasNodeDialogDetails,
+  getCanvasNodeDetails,
+} from '../lib/canvasNodeDetails';
+import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
+import { Scene, Shot } from '../types';
 import { toast } from 'sonner';
 
 export default function ProjectWorkspace() {
@@ -29,6 +48,7 @@ export default function ProjectWorkspace() {
     getScenesByProject,
     getShotsByProject,
     updateScene,
+    updateShot,
   } = useApp();
   const [activeTab, setActiveTab] = useState('script');
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
@@ -41,8 +61,15 @@ export default function ProjectWorkspace() {
   const selectedScene = selectedCanvasNode?.nodeType === 'scene' && selectedCanvasNode.refId
     ? scenes.find(scene => scene.id === selectedCanvasNode.refId)
     : undefined;
+  const selectedShot = selectedCanvasNode?.nodeType === 'shot' && selectedCanvasNode.refId
+    ? shots.find(shot => shot.id === selectedCanvasNode.refId)
+    : undefined;
   const selectedCanvasNodeDetails = useMemo(
     () => selectedCanvasNode ? getCanvasNodeDetails(selectedCanvasNode, scenes, shots) : null,
+    [selectedCanvasNode, scenes, shots],
+  );
+  const selectedCanvasNodeDialogDetails = useMemo(
+    () => selectedCanvasNode ? buildCanvasNodeDialogDetails(selectedCanvasNode, scenes, shots) : null,
     [selectedCanvasNode, scenes, shots],
   );
 
@@ -70,6 +97,11 @@ export default function ProjectWorkspace() {
   const handleSaveScene = async (sceneId: string, updates: Partial<Scene>) => {
     await updateScene(sceneId, updates);
     toast.success('场景已保存');
+  };
+
+  const handleSaveShot = async (shotId: string, updates: Partial<Shot>) => {
+    await updateShot(shotId, updates);
+    toast.success('镜头已保存');
   };
 
   return (
@@ -134,8 +166,11 @@ export default function ProjectWorkspace() {
                 <ResizablePanel defaultSize={25} minSize={20}>
                   <CanvasNodeInspector
                     details={selectedCanvasNodeDetails}
+                    dialogDetails={selectedCanvasNodeDialogDetails}
                     scene={selectedScene}
+                    shot={selectedShot}
                     onSaveScene={handleSaveScene}
+                    onSaveShot={handleSaveShot}
                   />
                 </ResizablePanel>
               </ResizablePanelGroup>
@@ -157,15 +192,24 @@ export default function ProjectWorkspace() {
 
 function CanvasNodeInspector({
   details,
+  dialogDetails,
   scene,
+  shot,
   onSaveScene,
+  onSaveShot,
 }: {
   details: ReturnType<typeof getCanvasNodeDetails> | null;
+  dialogDetails: CanvasNodeDialogDetails | null;
   scene?: Scene;
+  shot?: Shot;
   onSaveScene: (sceneId: string, updates: Partial<Scene>) => Promise<void>;
+  onSaveShot: (shotId: string, updates: Partial<Shot>) => Promise<void>;
 }) {
   const [sceneForm, setSceneForm] = useState<SceneForm | null>(null);
+  const [shotForm, setShotForm] = useState<ShotForm | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isSavingScene, setIsSavingScene] = useState(false);
+  const [isSavingShot, setIsSavingShot] = useState(false);
 
   useEffect(() => {
     if (!scene) {
@@ -182,6 +226,15 @@ function CanvasNodeInspector({
     });
   }, [scene]);
 
+  useEffect(() => {
+    if (!shot) {
+      setShotForm(null);
+      return;
+    }
+
+    setShotForm(buildShotForm(shot));
+  }, [shot]);
+
   if (!details) {
     return (
       <div className="h-full border-l bg-muted/20 p-4">
@@ -195,6 +248,10 @@ function CanvasNodeInspector({
 
   const handleSceneFormChange = (field: keyof SceneForm, value: string) => {
     setSceneForm(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const handleShotFormChange = <K extends keyof ShotForm>(field: K, value: ShotForm[K]) => {
+    setShotForm(prev => prev ? { ...prev, [field]: value } : prev);
   };
 
   const handleSceneSave = async () => {
@@ -220,6 +277,23 @@ function CanvasNodeInspector({
     }
   };
 
+  const handleShotSave = async () => {
+    if (!shot || !shotForm) return;
+
+    const result = parseShotForm(shotForm);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    try {
+      setIsSavingShot(true);
+      await onSaveShot(shot.id, result.updates);
+    } finally {
+      setIsSavingShot(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-auto border-l bg-muted/20 p-4">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -227,7 +301,18 @@ function CanvasNodeInspector({
           <h3 className="font-semibold leading-snug">{details.title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{details.description}</p>
         </div>
-        <Badge variant="outline" className="shrink-0">{details.typeLabel}</Badge>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <Badge variant="outline">{details.typeLabel}</Badge>
+          {dialogDetails && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDetailDialogOpen(true)}
+            >
+              查看详情
+            </Button>
+          )}
+        </div>
       </div>
 
       <Separator className="mb-4" />
@@ -286,6 +371,104 @@ function CanvasNodeInspector({
         </>
       )}
 
+      {shot && shotForm && (
+        <>
+          <div className="mb-4 space-y-3 rounded-lg border bg-background p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-medium">编辑镜头</h4>
+              <Button size="sm" onClick={handleShotSave} disabled={isSavingShot}>
+                {isSavingShot ? '保存中...' : '保存'}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-xs text-muted-foreground">
+                镜头编号
+                <Input
+                  type="number"
+                  min={1}
+                  value={shotForm.shotNumber}
+                  onChange={(event) => handleShotFormChange('shotNumber', event.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-muted-foreground">
+                时长（秒）
+                <Input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={shotForm.duration}
+                  onChange={(event) => handleShotFormChange('duration', event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-xs text-muted-foreground">
+                景别
+                <Select
+                  value={shotForm.shotType}
+                  onValueChange={(value) =>
+                    handleShotFormChange('shotType', value as Shot['shotType'])
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SHOT_TYPE_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1 text-xs text-muted-foreground">
+                运镜
+                <Select
+                  value={shotForm.cameraMovement}
+                  onValueChange={(value) =>
+                    handleShotFormChange('cameraMovement', value as Shot['cameraMovement'])
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CAMERA_MOVEMENT_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              镜头描述
+              <Textarea
+                value={shotForm.description}
+                onChange={(event) => handleShotFormChange('description', event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              台词
+              <Textarea
+                value={shotForm.dialogue}
+                onChange={(event) => handleShotFormChange('dialogue', event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              提示词
+              <Textarea
+                value={shotForm.prompt}
+                onChange={(event) => handleShotFormChange('prompt', event.target.value)}
+              />
+            </label>
+          </div>
+          <Separator className="mb-4" />
+        </>
+      )}
+
       <div className="space-y-3">
         {details.rows.map(row => (
           <div key={row.label} className="rounded-md border bg-background p-3">
@@ -294,7 +477,65 @@ function CanvasNodeInspector({
           </div>
         ))}
       </div>
+
+      <CanvasNodeDetailDialog
+        details={dialogDetails}
+        open={isDetailDialogOpen}
+        onOpenChange={setIsDetailDialogOpen}
+      />
     </div>
+  );
+}
+
+function CanvasNodeDetailDialog({
+  details,
+  open,
+  onOpenChange,
+}: {
+  details: CanvasNodeDialogDetails | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!details) {
+    return null;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-3 pr-8">
+            <div>
+              <DialogTitle>{details.title}</DialogTitle>
+              <DialogDescription className="mt-2">{details.description}</DialogDescription>
+            </div>
+            <Badge variant="outline" className="shrink-0">{details.typeLabel}</Badge>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {details.sections.map(section => (
+            <section key={section.title} className="rounded-lg border bg-muted/20 p-4">
+              <h4 className="mb-3 text-sm font-medium">{section.title}</h4>
+              <div className="space-y-3">
+                {section.rows.map(row => (
+                  <div key={`${section.title}-${row.label}`}>
+                    <div className="text-xs text-muted-foreground">{row.label}</div>
+                    <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                      {row.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <div className="rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+          {details.footerNote}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -305,6 +546,26 @@ type SceneForm = {
   timeOfDay: string;
   characters: string;
 };
+
+const SHOT_TYPE_OPTIONS: Array<{ value: Shot['shotType']; label: string }> = [
+  { value: 'wide', label: '远景' },
+  { value: 'medium', label: '中景' },
+  { value: 'close-up', label: '近景' },
+  { value: 'extreme-close-up', label: '特写' },
+  { value: 'over-shoulder', label: '过肩' },
+  { value: 'pov', label: '主观视角' },
+  { value: 'other', label: '其他' },
+];
+
+const CAMERA_MOVEMENT_OPTIONS: Array<{ value: Shot['cameraMovement']; label: string }> = [
+  { value: 'static', label: '固定' },
+  { value: 'pan', label: '摇摄' },
+  { value: 'tilt', label: '俯仰' },
+  { value: 'zoom', label: '变焦' },
+  { value: 'tracking', label: '跟拍' },
+  { value: 'dolly', label: '推拉' },
+  { value: 'other', label: '其他' },
+];
 
 function parseCharacters(value: string): string[] {
   return value

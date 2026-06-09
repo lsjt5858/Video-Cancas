@@ -13,6 +13,19 @@ export type CanvasNodeDetails = {
   rows: CanvasNodeDetailRow[];
 };
 
+export type CanvasNodeDialogSection = {
+  title: string;
+  rows: CanvasNodeDetailRow[];
+};
+
+export type CanvasNodeDialogDetails = {
+  title: string;
+  typeLabel: string;
+  description: string;
+  sections: CanvasNodeDialogSection[];
+  footerNote: string;
+};
+
 export function getCanvasNodeDetails(
   node: CanvasNode,
   scenes: Scene[],
@@ -63,6 +76,77 @@ export function getCanvasNodeDetails(
     typeLabel: presentation.label,
     description: '项目剧本入口，后续可联动角色、场景和镜头节点。',
     rows: getNodeMetadataRows(node),
+  };
+}
+
+export function buildCanvasNodeDialogDetails(
+  node: CanvasNode,
+  scenes: Scene[],
+  shots: Shot[],
+): CanvasNodeDialogDetails {
+  const details = getCanvasNodeDetails(node, scenes, shots);
+  const scene = node.refId ? scenes.find(item => item.id === node.refId) : undefined;
+  const shot = node.refId ? shots.find(item => item.id === node.refId) : undefined;
+
+  if (node.nodeType === 'scene' && scene) {
+    return {
+      ...details,
+      sections: [
+        {
+          title: '场景内容',
+          rows: [
+            { label: '场景描述', value: scene.description || '未设置' },
+            { label: '地点', value: scene.location || '未设置' },
+            { label: '时间', value: scene.timeOfDay || '未设置' },
+            { label: '角色', value: scene.characters.join('、') || '未设置' },
+          ],
+        },
+        {
+          title: '节点元数据',
+          rows: getNodeMetadataRows(node),
+        },
+      ],
+      footerNote: '生成历史和候选结果待接入。',
+    };
+  }
+
+  if (node.nodeType === 'shot' && shot) {
+    return {
+      ...details,
+      sections: [
+        {
+          title: '镜头内容',
+          rows: [
+            { label: '镜头描述', value: shot.description || '未设置' },
+            { label: '提示词', value: shot.prompt || '未设置' },
+            { label: '台词', value: shot.dialogue || '未设置' },
+          ],
+        },
+        {
+          title: '生成结果',
+          rows: [
+            { label: '图片结果', value: shot.imageUrl || '未生成' },
+            { label: '视频结果', value: shot.videoUrl || '未生成' },
+          ],
+        },
+        {
+          title: '节点元数据',
+          rows: getNodeMetadataRows(node),
+        },
+      ],
+      footerNote: '生成历史和候选结果待接入。',
+    };
+  }
+
+  return {
+    ...details,
+    sections: [
+      {
+        title: '节点详情',
+        rows: details.rows,
+      },
+    ],
+    footerNote: '生成历史和候选结果待接入。',
   };
 }
 
