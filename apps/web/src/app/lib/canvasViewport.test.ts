@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateFitView } from './canvasViewport';
+import { calculateFitView, calculateFocusedView } from './canvasViewport';
 import { CanvasNode } from '../types';
 
 const makeNode = (
@@ -38,6 +38,20 @@ describe('canvas viewport', () => {
       scale: 1,
       offsetX: 0,
       offsetY: 0,
+    });
+  });
+
+  it('calculates a view that centers a selected node', () => {
+    expect(
+      calculateFocusedView(
+        makeNode('node-1', { x: 700, y: 420 }, { width: 240, height: 180 }),
+        { width: 1000, height: 700 },
+        1,
+      ),
+    ).toEqual({
+      scale: 1,
+      offsetX: -320,
+      offsetY: -160,
     });
   });
 });

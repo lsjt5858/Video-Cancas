@@ -54,3 +54,19 @@ export function calculateFitView(
     offsetY: (viewport.height - contentHeight * scale) / 2 - bounds.minY * scale,
   };
 }
+
+export function calculateFocusedView(
+  node: CanvasNode,
+  viewport: ViewportSize,
+  scale: number,
+): CanvasViewport {
+  const clampedScale = Math.min(2, Math.max(0.5, scale));
+  const nodeCenterX = node.position.x + node.size.width / 2;
+  const nodeCenterY = node.position.y + node.size.height / 2;
+
+  return {
+    scale: clampedScale,
+    offsetX: viewport.width / 2 - nodeCenterX * clampedScale,
+    offsetY: viewport.height / 2 - nodeCenterY * clampedScale,
+  };
+}

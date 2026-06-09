@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
+import { Input } from './ui/input';
 import {
   ZoomIn,
   ZoomOut,
@@ -13,9 +14,11 @@ import {
   FileText,
   MapPin,
   Link2,
+  Search,
 } from 'lucide-react';
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
-import { calculateFitView } from '../lib/canvasViewport';
+import { searchCanvasNodes } from '../lib/canvasSearch';
+import { calculateFitView, calculateFocusedView } from '../lib/canvasViewport';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -50,6 +53,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const selectedNode = nodes.find(node => node.id === selectedNodeId);
@@ -59,6 +63,10 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const selectedScene = selectedNode?.refId
     ? scenes.find(scene => scene.id === selectedNode.refId)
     : undefined;
+  const searchResults = useMemo(
+    () => searchCanvasNodes(searchQuery, nodes, scenes, shots),
+    [searchQuery, nodes, scenes, shots],
+  );
 
   const handleZoomIn = () => {
     setCanvas(prev => ({ ...prev, scale: Math.min(prev.scale + 0.1, 2) }));
@@ -76,6 +84,15 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     setCanvas(calculateFitView(nodes, { width: rect.width, height: rect.height }));
+  };
+
+  const handleFocusNode = (node: CanvasNode) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setSelectedNodeId(node.id);
+    setCanvas(calculateFocusedView(node, { width: rect.width, height: rect.height }, canvas.scale));
+    setSearchQuery('');
   };
 
   useEffect(() => {
@@ -239,10 +256,45 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     <div className="h-full flex flex-col bg-muted/20">
       {/* Toolbar */}
       <div className="border-b bg-background px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
             {nodes.length} 个画布节点
           </span>
+          <div className="relative w-80">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索场景、镜头号、角色、提示词"
+              className="h-8 pl-8"
+            />
+            {searchQuery.trim() && (
+              <div className="absolute left-0 top-10 z-20 max-h-72 w-full overflow-auto rounded-md border bg-background shadow-lg">
+                {searchResults.length > 0 ? (
+                  searchResults.map(result => (
+                    <button
+                      key={result.node.id}
+                      type="button"
+                      onClick={() => handleFocusNode(result.node)}
+                      className="block w-full px-3 py-2 text-left hover:bg-muted"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">{result.title}</span>
+                        <Badge variant="outline" className="shrink-0 text-xs">
+                          {getCanvasNodePresentation(result.node.nodeType).label}
+                        </Badge>
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {result.description || '无匹配描述'}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">未找到匹配节点</div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleZoomOut}>
