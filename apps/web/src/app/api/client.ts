@@ -93,6 +93,8 @@ type ApiSceneCreate = {
   characters: string[];
 };
 
+type ApiSceneUpdate = Partial<ApiSceneCreate>;
+
 type ApiShotCreate = {
   scene_id: string;
   shot_number: number;
@@ -236,6 +238,18 @@ export async function createScene(input: Omit<Scene, 'id'>): Promise<Scene> {
   return mapSceneFromApi(scene);
 }
 
+export async function updateScene(
+  projectId: string,
+  sceneId: string,
+  updates: Partial<Scene>,
+): Promise<Scene> {
+  const scene = await apiFetch<ApiScene>(`/projects/${projectId}/scenes/${sceneId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(mapSceneUpdateToApi(updates)),
+  });
+  return mapSceneFromApi(scene);
+}
+
 export async function deleteScene(projectId: string, sceneId: string): Promise<void> {
   await apiFetch<void>(`/projects/${projectId}/scenes/${sceneId}`, { method: 'DELETE' });
 }
@@ -320,6 +334,16 @@ function mapSceneCreateToApi(input: Omit<Scene, 'id'>): ApiSceneCreate {
     time_of_day: input.timeOfDay || null,
     characters: input.characters,
   };
+}
+
+function mapSceneUpdateToApi(updates: Partial<Scene>): ApiSceneUpdate {
+  const payload: ApiSceneUpdate = {};
+  if (updates.sceneNumber !== undefined) payload.scene_number = updates.sceneNumber;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.location !== undefined) payload.location = updates.location || null;
+  if (updates.timeOfDay !== undefined) payload.time_of_day = updates.timeOfDay || null;
+  if (updates.characters !== undefined) payload.characters = updates.characters;
+  return payload;
 }
 
 function mapShotCreateToApi(input: Omit<Shot, 'id'>): ApiShotCreate {

@@ -6,6 +6,7 @@ import {
   mapProjectFromApi,
   mapSceneFromApi,
   mapShotFromApi,
+  updateScene,
 } from './client';
 
 afterEach(() => {
@@ -170,6 +171,57 @@ describe('canvas edge API', () => {
           target_node_id: 'node-2',
           relation_type: 'story_flow',
           data: { label: '关联' },
+        }),
+      }),
+    );
+  });
+});
+
+describe('scene API', () => {
+  it('updates a scene with snake_case payload and maps the response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'scene-1',
+        project_id: 'project-1',
+        scene_number: 2,
+        description: '母亲等待孩子',
+        location: '旧车站',
+        time_of_day: '黄昏',
+        characters: ['母亲', '孩子'],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      updateScene('project-1', 'scene-1', {
+        sceneNumber: 2,
+        description: '母亲等待孩子',
+        location: '旧车站',
+        timeOfDay: '黄昏',
+        characters: ['母亲', '孩子'],
+      }),
+    ).resolves.toEqual({
+      id: 'scene-1',
+      projectId: 'project-1',
+      sceneNumber: 2,
+      description: '母亲等待孩子',
+      location: '旧车站',
+      timeOfDay: '黄昏',
+      characters: ['母亲', '孩子'],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project-1/scenes/scene-1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          scene_number: 2,
+          description: '母亲等待孩子',
+          location: '旧车站',
+          time_of_day: '黄昏',
+          characters: ['母亲', '孩子'],
         }),
       }),
     );

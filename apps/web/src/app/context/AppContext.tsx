@@ -154,7 +154,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateScene = async (id: string, updates: Partial<Scene>) => {
-    setScenes(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    const scene = scenes.find(s => s.id === id);
+    if (scene) {
+      const updatedScene = await api.updateScene(scene.projectId, id, updates);
+      setScenes(prev => prev.map(s => s.id === id ? updatedScene : s));
+    }
   };
 
   const deleteScene = async (id: string) => {
