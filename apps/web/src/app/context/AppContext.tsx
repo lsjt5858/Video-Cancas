@@ -45,6 +45,10 @@ interface AppContextType {
   // Canvas methods
   getCanvasNodesByProject: (projectId: string) => CanvasNode[];
   getCanvasEdgesByProject: (projectId: string) => CanvasEdge[];
+  createCanvasEdge: (
+    projectId: string,
+    input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
+  ) => Promise<CanvasEdge>;
   updateCanvasNode: (id: string, updates: Partial<CanvasNode>) => Promise<void>;
   moveCanvasNodeLocally: (id: string, position: CanvasNode['position']) => void;
   
@@ -210,6 +214,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getCanvasEdgesByProject = (projectId: string) =>
     canvasEdges.filter(edge => edge.projectId === projectId);
 
+  const createCanvasEdge = async (
+    projectId: string,
+    input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
+  ) => {
+    const existingEdge = canvasEdges.find(edge =>
+      edge.projectId === projectId &&
+      edge.sourceNodeId === input.sourceNodeId &&
+      edge.targetNodeId === input.targetNodeId &&
+      edge.relationType === input.relationType
+    );
+    if (existingEdge) {
+      return existingEdge;
+    }
+
+    const newEdge = await api.createCanvasEdge(projectId, input);
+    setCanvasEdges(prev => [...prev, newEdge]);
+    return newEdge;
+  };
+
   const updateCanvasNode = async (id: string, updates: Partial<CanvasNode>) => {
     const node = canvasNodes.find(canvasNode => canvasNode.id === id);
     if (!node) return;
@@ -344,6 +367,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getShotsByScene,
       getCanvasNodesByProject,
       getCanvasEdgesByProject,
+      createCanvasEdge,
       updateCanvasNode,
       moveCanvasNodeLocally,
       createAsset,

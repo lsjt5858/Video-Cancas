@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createCanvasEdge,
   mapCanvasEdgeFromApi,
   mapCanvasNodeFromApi,
   mapProjectFromApi,
   mapSceneFromApi,
   mapShotFromApi,
 } from './client';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('API response mappers', () => {
   it('maps project fields from API snake_case into UI camelCase', () => {
@@ -121,5 +126,52 @@ describe('API response mappers', () => {
       relationType: 'workflow',
       data: {},
     });
+  });
+});
+
+describe('canvas edge API', () => {
+  it('creates a canvas edge and maps the response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        id: 'edge-1',
+        project_id: 'project-1',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        relation_type: 'story_flow',
+        data: { label: '关联' },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createCanvasEdge('project-1', {
+        sourceNodeId: 'node-1',
+        targetNodeId: 'node-2',
+        relationType: 'story_flow',
+        data: { label: '关联' },
+      }),
+    ).resolves.toEqual({
+      id: 'edge-1',
+      projectId: 'project-1',
+      sourceNodeId: 'node-1',
+      targetNodeId: 'node-2',
+      relationType: 'story_flow',
+      data: { label: '关联' },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project-1/canvas/edges',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          relation_type: 'story_flow',
+          data: { label: '关联' },
+        }),
+      }),
+    );
   });
 });

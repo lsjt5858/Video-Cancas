@@ -1,10 +1,21 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { ZoomIn, ZoomOut, Maximize2, Image, Video, FileText, MapPin } from 'lucide-react';
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  RotateCcw,
+  Image,
+  Video,
+  FileText,
+  MapPin,
+  Link2,
+} from 'lucide-react';
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
+import { calculateFitView } from '../lib/canvasViewport';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -23,6 +34,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     getCanvasEdgesByProject,
     getScenesByProject,
     getShotsByProject,
+    createCanvasEdge,
     moveCanvasNodeLocally,
     updateCanvasNode,
   } = useApp();
@@ -36,6 +48,8 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
+  const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const selectedNode = nodes.find(node => node.id === selectedNodeId);
@@ -58,7 +72,42 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     setCanvas({ scale: 1, offsetX: 0, offsetY: 0 });
   };
 
+  const handleFitView = () => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setCanvas(calculateFitView(nodes, { width: rect.width, height: rect.height }));
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        handleZoomIn();
+      } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault();
+        handleZoomOut();
+      } else if (event.key === '0') {
+        event.preventDefault();
+        handleResetView();
+      } else if (event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        handleFitView();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nodes]);
+
   const handleMouseDown = (e: React.MouseEvent, nodeId?: string) => {
+    if (connectingFromNodeId) {
+      return;
+    }
+
     if (nodeId) {
       const node = nodes.find(canvasNode => canvasNode.id === nodeId);
       if (node) {
@@ -83,7 +132,9 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (draggedNode) {
+    if (connectingFromNodeId) {
+      setConnectionPointer(getCanvasPoint(e));
+    } else if (draggedNode) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
         const canvasX = (e.clientX - rect.left - canvas.offsetX) / canvas.scale;
@@ -104,6 +155,12 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
   };
 
   const handleMouseUp = () => {
+    if (connectingFromNodeId) {
+      setConnectingFromNodeId(null);
+      setConnectionPointer(null);
+      return;
+    }
+
     if (draggedNode) {
       const node = nodes.find(canvasNode => canvasNode.id === draggedNode);
       if (node) {
@@ -114,6 +171,37 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
     setDraggedNode(null);
   };
 
+  const handleConnectionStart = (e: React.MouseEvent, nodeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const node = nodes.find(canvasNode => canvasNode.id === nodeId);
+    if (!node) return;
+    setSelectedNodeId(nodeId);
+    setConnectingFromNodeId(nodeId);
+    setConnectionPointer({
+      x: node.position.x + node.size.width,
+      y: node.position.y + node.size.height / 2,
+    });
+  };
+
+  const handleConnectionEnd = async (e: React.MouseEvent, targetNodeId: string) => {
+    if (!connectingFromNodeId) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const sourceNodeId = connectingFromNodeId;
+    setConnectingFromNodeId(null);
+    setConnectionPointer(null);
+    if (sourceNodeId === targetNodeId) return;
+
+    await createCanvasEdge(projectId, {
+      sourceNodeId,
+      targetNodeId,
+      relationType: 'story_flow',
+      data: {},
+    });
+  };
+
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
@@ -122,6 +210,30 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
       scale: Math.max(0.5, Math.min(2, prev.scale + delta)),
     }));
   };
+
+  const getCanvasPoint = (e: React.MouseEvent) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: (e.clientX - rect.left - canvas.offsetX) / canvas.scale,
+      y: (e.clientY - rect.top - canvas.offsetY) / canvas.scale,
+    };
+  };
+
+  const connectionSource = connectingFromNodeId
+    ? nodes.find(node => node.id === connectingFromNodeId)
+    : undefined;
+  const draftConnectionPath = connectionSource && connectionPointer
+    ? buildEdgePath(
+      connectionSource.position.x + connectionSource.size.width,
+      connectionSource.position.y + connectionSource.size.height / 2,
+      connectionPointer.x,
+      connectionPointer.y,
+    )
+    : null;
 
   return (
     <div className="h-full flex flex-col bg-muted/20">
@@ -142,8 +254,11 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
           <Button variant="outline" size="sm" onClick={handleZoomIn}>
             <ZoomIn className="size-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={handleResetView}>
+          <Button variant="outline" size="sm" onClick={handleFitView} title="适应全部节点 (F)">
             <Maximize2 className="size-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleResetView} title="重置视图 (0)">
+            <RotateCcw className="size-4" />
           </Button>
         </div>
       </div>
@@ -194,13 +309,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
               const sourceY = source.position.y + source.size.height / 2;
               const targetX = target.position.x;
               const targetY = target.position.y + target.size.height / 2;
-              const controlOffset = Math.max(80, Math.abs(targetX - sourceX) / 2);
-              const pathData = [
-                `M ${sourceX} ${sourceY}`,
-                `C ${sourceX + controlOffset} ${sourceY},`,
-                `${targetX - controlOffset} ${targetY},`,
-                `${targetX} ${targetY}`,
-              ].join(' ');
+              const pathData = buildEdgePath(sourceX, sourceY, targetX, targetY);
 
               return (
                 <path
@@ -214,6 +323,16 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
                 />
               );
             })}
+            {draftConnectionPath && (
+              <path
+                d={draftConnectionPath}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray="6 6"
+                className="text-primary/70"
+              />
+            )}
           </svg>
 
           {/* Canvas nodes */}
@@ -230,6 +349,9 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
                   e.stopPropagation();
                   handleMouseDown(e, node.id);
                 }}
+                onMouseUp={(e) => {
+                  void handleConnectionEnd(e, node.id);
+                }}
                 className="cursor-move"
               >
                 <CanvasNodeCard
@@ -237,6 +359,7 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
                   isSelected={selectedNodeId === node.id}
                   scene={node.refId ? scenes.find(item => item.id === node.refId) : undefined}
                   shot={node.refId ? shots.find(item => item.id === node.refId) : undefined}
+                  onConnectionStart={handleConnectionStart}
                 />
               </div>
             );
@@ -269,11 +392,13 @@ function CanvasNodeCard({
   isSelected,
   scene,
   shot,
+  onConnectionStart,
 }: {
   node: CanvasNode;
   isSelected: boolean;
   scene?: Scene;
   shot?: Shot;
+  onConnectionStart: (e: React.MouseEvent, nodeId: string) => void;
 }) {
   const presentation = getCanvasNodePresentation(node.nodeType);
   const title = getSelectedNodeTitle(node, scene, shot);
@@ -281,11 +406,20 @@ function CanvasNodeCard({
 
   return (
     <Card
-      className={`border-l-4 p-3 shadow-md hover:shadow-lg transition-shadow ${
+      className={`relative border-l-4 p-3 pr-8 shadow-md hover:shadow-lg transition-shadow ${
         presentation.accentClassName
       } ${isSelected ? 'ring-2 ring-primary' : ''}`}
       style={{ width: node.size.width }}
     >
+      <button
+        type="button"
+        title="拖拽创建连线"
+        aria-label="拖拽创建连线"
+        onMouseDown={(e) => onConnectionStart(e, node.id)}
+        className="absolute -right-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:border-primary hover:text-primary"
+      >
+        <Link2 className="size-3" />
+      </button>
       <div className="flex items-start justify-between mb-2">
         <Badge variant="outline" className={`text-xs ${presentation.badgeClassName}`}>
           {presentation.label}
@@ -350,4 +484,14 @@ function getSelectedNodeDescription(
     return `${shot.shotType} · ${shot.duration}s · ${shot.prompt}`;
   }
   return '项目剧本入口，后续可联动角色、场景和镜头节点。';
+}
+
+function buildEdgePath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
+  const controlOffset = Math.max(80, Math.abs(targetX - sourceX) / 2);
+  return [
+    `M ${sourceX} ${sourceY}`,
+    `C ${sourceX + controlOffset} ${sourceY},`,
+    `${targetX - controlOffset} ${targetY},`,
+    `${targetX} ${targetY}`,
+  ].join(' ');
 }

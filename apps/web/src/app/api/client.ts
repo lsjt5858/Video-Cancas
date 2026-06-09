@@ -70,6 +70,13 @@ type ApiCanvasEdge = {
   data: Record<string, unknown>;
 };
 
+type ApiCanvasEdgeCreate = {
+  source_node_id: string;
+  target_node_id: string;
+  relation_type: string;
+  data: Record<string, unknown>;
+};
+
 type ApiProjectCreate = {
   name: string;
   type: string;
@@ -284,6 +291,17 @@ export async function listCanvasEdges(projectId: string): Promise<CanvasEdge[]> 
   return edges.map(mapCanvasEdgeFromApi);
 }
 
+export async function createCanvasEdge(
+  projectId: string,
+  input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
+): Promise<CanvasEdge> {
+  const edge = await apiFetch<ApiCanvasEdge>(`/projects/${projectId}/canvas/edges`, {
+    method: 'POST',
+    body: JSON.stringify(mapCanvasEdgeCreateToApi(input)),
+  });
+  return mapCanvasEdgeFromApi(edge);
+}
+
 function mapProjectCreateToApi(input: ProjectCreateInput): ApiProjectCreate {
   return {
     name: input.name,
@@ -345,6 +363,17 @@ function mapCanvasNodeUpdateToApi(
   if (updates.size !== undefined) payload.size = updates.size;
   if (updates.data !== undefined) payload.data = updates.data;
   return payload;
+}
+
+function mapCanvasEdgeCreateToApi(
+  input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
+): ApiCanvasEdgeCreate {
+  return {
+    source_node_id: input.sourceNodeId,
+    target_node_id: input.targetNodeId,
+    relation_type: input.relationType,
+    data: input.data,
+  };
 }
 
 function mapProjectTypeToApi(type: Project['type']): string {
