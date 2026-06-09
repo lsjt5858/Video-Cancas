@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildCanvasNodeDialogDetails, getCanvasNodeDetails } from './canvasNodeDetails';
+import {
+  buildCanvasNodeDialogDetails,
+  formatCanvasNodeDetailsForCopy,
+  getCanvasNodeDetails,
+} from './canvasNodeDetails';
 import { CanvasNode, Scene, Shot } from '../types';
 
 const scene: Scene = {
@@ -45,7 +49,9 @@ function makeNode(
 
 describe('canvas node details', () => {
   it('builds detail rows for a scene node', () => {
-    expect(getCanvasNodeDetails(makeNode('scene', scene.id), [scene], [shot])).toMatchObject({
+    const details = getCanvasNodeDetails(makeNode('scene', scene.id), [scene], [shot]);
+
+    expect(details).toMatchObject({
       title: '场景 1: 母亲等待',
       typeLabel: '场景',
       description: '旧车站 · 黄昏 · 母亲、孩子',
@@ -56,10 +62,18 @@ describe('canvas node details', () => {
         { label: '角色', value: '母亲、孩子' },
       ]),
     });
+    expect(details.rows.map(row => row.label)).not.toEqual(expect.arrayContaining([
+      '节点 ID',
+      '关联 ID',
+      '位置',
+      '尺寸',
+    ]));
   });
 
   it('builds detail rows for a shot node', () => {
-    expect(getCanvasNodeDetails(makeNode('shot', shot.id), [scene], [shot])).toMatchObject({
+    const details = getCanvasNodeDetails(makeNode('shot', shot.id), [scene], [shot]);
+
+    expect(details).toMatchObject({
       title: '镜头 2: 孩子穿过人群',
       typeLabel: '镜头',
       rows: expect.arrayContaining([
@@ -70,17 +84,22 @@ describe('canvas node details', () => {
         { label: '台词', value: '妈妈，我回来了。' },
       ]),
     });
+    expect(details.rows.map(row => row.label)).not.toEqual(expect.arrayContaining([
+      '节点 ID',
+      '关联 ID',
+      '位置',
+      '尺寸',
+    ]));
   });
 
-  it('falls back to node metadata when no related entity exists', () => {
+  it('falls back to creator-friendly script information when no related entity exists', () => {
     expect(getCanvasNodeDetails(makeNode('script', 'script-1'), [], [])).toMatchObject({
       title: '旧车站重逢',
       typeLabel: '剧本',
       description: '项目剧本入口，后续可联动角色、场景和镜头节点。',
       rows: expect.arrayContaining([
-        { label: '节点 ID', value: 'script-node' },
-        { label: '位置', value: '640, 80' },
-        { label: '尺寸', value: '200 x 180' },
+        { label: '创作阶段', value: '剧本与故事结构' },
+        { label: '后续动作', value: '可继续拆分场景、镜头、角色和提示词。' },
       ]),
     });
   });
@@ -91,7 +110,15 @@ describe('canvas node details', () => {
       typeLabel: '镜头',
       sections: expect.arrayContaining([
         {
-          title: '镜头内容',
+          title: '镜头设计',
+          rows: expect.arrayContaining([
+            { label: '景别', value: 'wide' },
+            { label: '运镜', value: 'tracking' },
+            { label: '时长', value: '4s' },
+          ]),
+        },
+        {
+          title: '提示词与生成输入',
           rows: [
             { label: '镜头描述', value: '孩子穿过人群' },
             { label: '提示词', value: 'A child walks through the crowd at an old station' },
@@ -106,8 +133,12 @@ describe('canvas node details', () => {
           ],
         },
       ]),
-      footerNote: '生成历史和候选结果待接入。',
+      footerNote: '生成历史、候选结果和素材版本待接入。',
     });
+    expect(
+      buildCanvasNodeDialogDetails(makeNode('shot', shot.id), [scene], [shot])
+        .sections.flatMap(section => section.rows.map(row => row.label)),
+    ).not.toEqual(expect.arrayContaining(['节点 ID', '关联 ID', '位置', '尺寸']));
   });
 
   it('builds dialog sections for a scene node', () => {
@@ -116,7 +147,7 @@ describe('canvas node details', () => {
       typeLabel: '场景',
       sections: expect.arrayContaining([
         {
-          title: '场景内容',
+          title: '场景信息',
           rows: [
             { label: '场景描述', value: '母亲等待' },
             { label: '地点', value: '旧车站' },
@@ -126,5 +157,21 @@ describe('canvas node details', () => {
         },
       ]),
     });
+    expect(
+      buildCanvasNodeDialogDetails(makeNode('scene', scene.id), [scene], [shot])
+        .sections.flatMap(section => section.rows.map(row => row.label)),
+    ).not.toEqual(expect.arrayContaining(['节点 ID', '关联 ID', '位置', '尺寸']));
+  });
+
+  it('formats node details for creator-friendly copy text', () => {
+    const copyText = formatCanvasNodeDetailsForCopy(
+      buildCanvasNodeDialogDetails(makeNode('shot', shot.id), [scene], [shot]),
+    );
+
+    expect(copyText).toContain('镜头: 镜头 2: 孩子穿过人群');
+    expect(copyText).toContain('景别: wide');
+    expect(copyText).toContain('提示词: A child walks through the crowd at an old station');
+    expect(copyText).not.toContain('节点 ID');
+    expect(copyText).not.toContain('shot-node');
   });
 });

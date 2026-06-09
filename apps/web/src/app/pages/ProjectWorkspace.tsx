@@ -31,10 +31,12 @@ import TimelineView from '../components/TimelineView';
 import {
   buildCanvasNodeDialogDetails,
   CanvasNodeDialogDetails,
+  formatCanvasNodeDetailsForCopy,
   getCanvasNodeDetails,
 } from '../lib/canvasNodeDetails';
+import { CanvasNodeContextMenuAction } from '../lib/canvasNodeContextMenu';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
-import { Scene, Shot } from '../types';
+import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
 
 export default function ProjectWorkspace() {
@@ -52,6 +54,7 @@ export default function ProjectWorkspace() {
   } = useApp();
   const [activeTab, setActiveTab] = useState('script');
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   
   const project = projectId ? getProject(projectId) : undefined;
   const canvasNodes = project ? getCanvasNodesByProject(project.id) : [];
@@ -102,6 +105,27 @@ export default function ProjectWorkspace() {
   const handleSaveShot = async (shotId: string, updates: Partial<Shot>) => {
     await updateShot(shotId, updates);
     toast.success('镜头已保存');
+  };
+
+  const handleNodeContextMenuAction = async (
+    action: CanvasNodeContextMenuAction,
+    node: CanvasNode,
+  ) => {
+    setSelectedCanvasNodeId(node.id);
+    const dialogDetails = buildCanvasNodeDialogDetails(node, scenes, shots);
+
+    if (action === 'view_details') {
+      setIsDetailDialogOpen(true);
+      return;
+    }
+
+    if (action === 'copy_info') {
+      await copyNodeDetailsToClipboard(dialogDetails);
+      toast.success('节点信息已复制');
+      return;
+    }
+
+    toast.info('该操作待接入');
   };
 
   return (
@@ -160,6 +184,9 @@ export default function ProjectWorkspace() {
                     projectId={project.id}
                     selectedNodeId={selectedCanvasNodeId}
                     onSelectedNodeIdChange={setSelectedCanvasNodeId}
+                    onNodeContextMenuAction={(action, node) => {
+                      void handleNodeContextMenuAction(action, node);
+                    }}
                   />
                 </ResizablePanel>
                 <ResizableHandle />
@@ -169,6 +196,8 @@ export default function ProjectWorkspace() {
                     dialogDetails={selectedCanvasNodeDialogDetails}
                     scene={selectedScene}
                     shot={selectedShot}
+                    detailDialogOpen={isDetailDialogOpen}
+                    onDetailDialogOpenChange={setIsDetailDialogOpen}
                     onSaveScene={handleSaveScene}
                     onSaveShot={handleSaveShot}
                   />
@@ -195,6 +224,8 @@ function CanvasNodeInspector({
   dialogDetails,
   scene,
   shot,
+  detailDialogOpen,
+  onDetailDialogOpenChange,
   onSaveScene,
   onSaveShot,
 }: {
@@ -202,12 +233,13 @@ function CanvasNodeInspector({
   dialogDetails: CanvasNodeDialogDetails | null;
   scene?: Scene;
   shot?: Shot;
+  detailDialogOpen: boolean;
+  onDetailDialogOpenChange: (open: boolean) => void;
   onSaveScene: (sceneId: string, updates: Partial<Scene>) => Promise<void>;
   onSaveShot: (shotId: string, updates: Partial<Shot>) => Promise<void>;
 }) {
   const [sceneForm, setSceneForm] = useState<SceneForm | null>(null);
   const [shotForm, setShotForm] = useState<ShotForm | null>(null);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isSavingScene, setIsSavingScene] = useState(false);
   const [isSavingShot, setIsSavingShot] = useState(false);
 
@@ -238,9 +270,9 @@ function CanvasNodeInspector({
   if (!details) {
     return (
       <div className="h-full border-l bg-muted/20 p-4">
-        <h3 className="font-semibold mb-4">属性面板</h3>
+        <h3 className="font-semibold mb-4">视频创作信息</h3>
         <p className="text-sm text-muted-foreground">
-          选择画布中的节点查看详情
+          选择场景或镜头节点，查看剧情、提示词、素材和生成状态。
         </p>
       </div>
     );
@@ -307,9 +339,9 @@ function CanvasNodeInspector({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsDetailDialogOpen(true)}
+              onClick={() => onDetailDialogOpenChange(true)}
             >
-              查看详情
+              完整信息
             </Button>
           )}
         </div>
@@ -480,8 +512,8 @@ function CanvasNodeInspector({
 
       <CanvasNodeDetailDialog
         details={dialogDetails}
-        open={isDetailDialogOpen}
-        onOpenChange={setIsDetailDialogOpen}
+        open={detailDialogOpen}
+        onOpenChange={onDetailDialogOpenChange}
       />
     </div>
   );
@@ -572,4 +604,8 @@ function parseCharacters(value: string): string[] {
     .split(/[、,\n]/)
     .map(item => item.trim())
     .filter(Boolean);
+}
+
+async function copyNodeDetailsToClipboard(details: CanvasNodeDialogDetails): Promise<void> {
+  await navigator.clipboard.writeText(formatCanvasNodeDetailsForCopy(details));
 }

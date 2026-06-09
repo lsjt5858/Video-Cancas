@@ -44,10 +44,10 @@ export function getCanvasNodeDetails(
         .join(' · '),
       rows: [
         { label: '场景编号', value: String(scene.sceneNumber) },
+        { label: '场景描述', value: scene.description || '未设置' },
         { label: '地点', value: scene.location || '未设置' },
         { label: '时间', value: scene.timeOfDay || '未设置' },
         { label: '角色', value: scene.characters.join('、') || '未设置' },
-        ...getNodeMetadataRows(node),
       ],
     };
   }
@@ -66,7 +66,6 @@ export function getCanvasNodeDetails(
         { label: '台词', value: shot.dialogue || '未设置' },
         { label: '图片结果', value: shot.imageUrl || '未生成' },
         { label: '视频结果', value: shot.videoUrl || '未生成' },
-        ...getNodeMetadataRows(node),
       ],
     };
   }
@@ -75,7 +74,7 @@ export function getCanvasNodeDetails(
     title: node.title || presentation.label,
     typeLabel: presentation.label,
     description: '项目剧本入口，后续可联动角色、场景和镜头节点。',
-    rows: getNodeMetadataRows(node),
+    rows: getGenericCreatorRows(node),
   };
 }
 
@@ -93,7 +92,7 @@ export function buildCanvasNodeDialogDetails(
       ...details,
       sections: [
         {
-          title: '场景内容',
+          title: '场景信息',
           rows: [
             { label: '场景描述', value: scene.description || '未设置' },
             { label: '地点', value: scene.location || '未设置' },
@@ -101,12 +100,8 @@ export function buildCanvasNodeDialogDetails(
             { label: '角色', value: scene.characters.join('、') || '未设置' },
           ],
         },
-        {
-          title: '节点元数据',
-          rows: getNodeMetadataRows(node),
-        },
       ],
-      footerNote: '生成历史和候选结果待接入。',
+      footerNote: '生成历史、候选结果和素材版本待接入。',
     };
   }
 
@@ -115,7 +110,15 @@ export function buildCanvasNodeDialogDetails(
       ...details,
       sections: [
         {
-          title: '镜头内容',
+          title: '镜头设计',
+          rows: [
+            { label: '景别', value: shot.shotType },
+            { label: '运镜', value: shot.cameraMovement },
+            { label: '时长', value: `${shot.duration}s` },
+          ],
+        },
+        {
+          title: '提示词与生成输入',
           rows: [
             { label: '镜头描述', value: shot.description || '未设置' },
             { label: '提示词', value: shot.prompt || '未设置' },
@@ -129,12 +132,8 @@ export function buildCanvasNodeDialogDetails(
             { label: '视频结果', value: shot.videoUrl || '未生成' },
           ],
         },
-        {
-          title: '节点元数据',
-          rows: getNodeMetadataRows(node),
-        },
       ],
-      footerNote: '生成历史和候选结果待接入。',
+      footerNote: '生成历史、候选结果和素材版本待接入。',
     };
   }
 
@@ -142,20 +141,64 @@ export function buildCanvasNodeDialogDetails(
     ...details,
     sections: [
       {
-        title: '节点详情',
+        title: '创作信息',
         rows: details.rows,
       },
     ],
-    footerNote: '生成历史和候选结果待接入。',
+    footerNote: '生成历史、候选结果和素材版本待接入。',
   };
 }
 
-function getNodeMetadataRows(node: CanvasNode): CanvasNodeDetailRow[] {
+export function formatCanvasNodeDetailsForCopy(details: CanvasNodeDialogDetails): string {
   return [
-    { label: '节点 ID', value: node.id },
-    { label: '关联类型', value: node.refType || '无' },
-    { label: '关联 ID', value: node.refId || '无' },
-    { label: '位置', value: `${Math.round(node.position.x)}, ${Math.round(node.position.y)}` },
-    { label: '尺寸', value: `${Math.round(node.size.width)} x ${Math.round(node.size.height)}` },
+    `${details.typeLabel}: ${details.title}`,
+    details.description,
+    ...details.sections.flatMap(section => [
+      '',
+      `[${section.title}]`,
+      ...section.rows.map(row => `${row.label}: ${row.value}`),
+    ]),
+  ].join('\n');
+}
+
+function getGenericCreatorRows(node: CanvasNode): CanvasNodeDetailRow[] {
+  if (node.nodeType === 'script') {
+    return [
+      { label: '创作阶段', value: '剧本与故事结构' },
+      { label: '后续动作', value: '可继续拆分场景、镜头、角色和提示词。' },
+    ];
+  }
+
+  if (node.nodeType === 'prompt') {
+    return [
+      { label: '创作阶段', value: '提示词打磨' },
+      { label: '后续动作', value: '可继续生成图片或视频候选。' },
+    ];
+  }
+
+  if (node.nodeType === 'image_result') {
+    return [
+      { label: '创作阶段', value: '图片候选' },
+      { label: '后续动作', value: '可作为首帧、参考图或素材入库。' },
+    ];
+  }
+
+  if (node.nodeType === 'video_result') {
+    return [
+      { label: '创作阶段', value: '视频候选' },
+      { label: '后续动作', value: '可预览、选择并加入时间线。' },
+    ];
+  }
+
+  if (node.nodeType === 'export') {
+    return [
+      { label: '创作阶段', value: '导出交付' },
+      { label: '后续动作', value: '可生成素材包、分镜表、提示词表或成片。' },
+    ];
+  }
+
+  return [
+    { label: '创作阶段', value: '视频创作节点' },
+    { label: '后续动作', value: '可继续完善内容或连接到生成链路。' },
   ];
 }

@@ -5,6 +5,13 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from './ui/context-menu';
+import {
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -19,6 +26,10 @@ import {
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
 import { searchCanvasNodes } from '../lib/canvasSearch';
 import {
+  CanvasNodeContextMenuAction,
+  getCanvasNodeContextMenuItems,
+} from '../lib/canvasNodeContextMenu';
+import {
   calculateCenteredView,
   calculateFitView,
   calculateFocusedView,
@@ -31,6 +42,7 @@ interface CanvasViewProps {
   projectId: string;
   selectedNodeId: string | null;
   onSelectedNodeIdChange: (nodeId: string | null) => void;
+  onNodeContextMenuAction: (action: CanvasNodeContextMenuAction, node: CanvasNode) => void;
 }
 
 interface CanvasState {
@@ -45,6 +57,7 @@ export default function CanvasView({
   projectId,
   selectedNodeId,
   onSelectedNodeIdChange,
+  onNodeContextMenuAction,
 }: CanvasViewProps) {
   const {
     getCanvasNodesByProject,
@@ -171,6 +184,10 @@ export default function CanvasView({
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent, nodeId?: string) => {
+    if (e.button !== 0) {
+      return;
+    }
+
     if (connectingFromNodeId) {
       return;
     }
@@ -464,6 +481,7 @@ export default function CanvasView({
                 onMouseUp={(e) => {
                   void handleConnectionEnd(e, node.id);
                 }}
+                onContextMenu={() => onSelectedNodeIdChange(node.id)}
                 className="cursor-move"
               >
                 <CanvasNodeCard
@@ -472,6 +490,7 @@ export default function CanvasView({
                   scene={node.refId ? scenes.find(item => item.id === node.refId) : undefined}
                   shot={node.refId ? shots.find(item => item.id === node.refId) : undefined}
                   onConnectionStart={handleConnectionStart}
+                  onMenuAction={onNodeContextMenuAction}
                 />
               </div>
             );
@@ -593,51 +612,82 @@ function CanvasNodeCard({
   scene,
   shot,
   onConnectionStart,
+  onMenuAction,
 }: {
   node: CanvasNode;
   isSelected: boolean;
   scene?: Scene;
   shot?: Shot;
   onConnectionStart: (e: React.MouseEvent, nodeId: string) => void;
+  onMenuAction: (action: CanvasNodeContextMenuAction, node: CanvasNode) => void;
 }) {
   const presentation = getCanvasNodePresentation(node.nodeType);
   const title = getSelectedNodeTitle(node, scene, shot);
   const description = getSelectedNodeDescription(node, scene, shot);
+  const menuItems = getCanvasNodeContextMenuItems(node);
 
   return (
-    <Card
-      className={`relative border-l-4 p-3 pr-8 shadow-md hover:shadow-lg transition-shadow ${
-        presentation.accentClassName
-      } ${isSelected ? 'ring-2 ring-primary' : ''}`}
-      style={{ width: node.size.width }}
-    >
-      <button
-        type="button"
-        title="拖拽创建连线"
-        aria-label="拖拽创建连线"
-        onMouseDown={(e) => onConnectionStart(e, node.id)}
-        className="absolute -right-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:border-primary hover:text-primary"
-      >
-        <Link2 className="size-3" />
-      </button>
-      <div className="flex items-start justify-between mb-2">
-        <Badge variant="outline" className={`text-xs ${presentation.badgeClassName}`}>
-          {presentation.label}
-        </Badge>
-        <NodeStatusIcons node={node} shot={shot} />
-      </div>
-      <div className="text-sm font-medium line-clamp-2 mb-1">{title}</div>
-      <div className="text-xs text-muted-foreground line-clamp-3">{description}</div>
-      {shot?.imageUrl && (
-        <div className="mt-2 rounded overflow-hidden">
-          <img
-            src={shot.imageUrl}
-            alt={shot.description}
-            className="w-full h-24 object-cover"
-          />
-        </div>
-      )}
-    </Card>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <Card
+          className={`relative border-l-4 p-3 pr-8 shadow-md hover:shadow-lg transition-shadow ${
+            presentation.accentClassName
+          } ${isSelected ? 'ring-2 ring-primary' : ''}`}
+          style={{ width: node.size.width }}
+        >
+          <button
+            type="button"
+            title="拖拽创建连线"
+            aria-label="拖拽创建连线"
+            onMouseDown={(e) => onConnectionStart(e, node.id)}
+            className="absolute -right-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:border-primary hover:text-primary"
+          >
+            <Link2 className="size-3" />
+          </button>
+          <div className="flex items-start justify-between mb-2">
+            <Badge variant="outline" className={`text-xs ${presentation.badgeClassName}`}>
+              {presentation.label}
+            </Badge>
+            <NodeStatusIcons node={node} shot={shot} />
+          </div>
+          <div className="text-sm font-medium line-clamp-2 mb-1">{title}</div>
+          <div className="text-xs text-muted-foreground line-clamp-3">{description}</div>
+          {shot?.imageUrl && (
+            <div className="mt-2 rounded overflow-hidden">
+              <img
+                src={shot.imageUrl}
+                alt={shot.description}
+                className="w-full h-24 object-cover"
+              />
+            </div>
+          )}
+        </Card>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {menuItems.map((item) => (
+          item.action === 'delete_node' ? (
+            <div key={item.action}>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                disabled={item.disabled}
+                variant="destructive"
+                onSelect={() => onMenuAction(item.action, node)}
+              >
+                {item.label}
+              </ContextMenuItem>
+            </div>
+          ) : (
+            <ContextMenuItem
+              key={item.action}
+              disabled={item.disabled}
+              onSelect={() => onMenuAction(item.action, node)}
+            >
+              {item.label}
+            </ContextMenuItem>
+          )
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
