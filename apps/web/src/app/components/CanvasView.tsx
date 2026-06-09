@@ -194,25 +194,25 @@ export default function CanvasView({ projectId }: CanvasViewProps) {
               const sourceY = source.position.y + source.size.height / 2;
               const targetX = target.position.x;
               const targetY = target.position.y + target.size.height / 2;
-                const controlOffset = Math.max(80, Math.abs(targetX - sourceX) / 2);
-                const pathData = [
-                  `M ${sourceX} ${sourceY}`,
-                  `C ${sourceX + controlOffset} ${sourceY},`,
-                  `${targetX - controlOffset} ${targetY},`,
-                  `${targetX} ${targetY}`,
-                ].join(' ');
+              const controlOffset = Math.max(80, Math.abs(targetX - sourceX) / 2);
+              const pathData = [
+                `M ${sourceX} ${sourceY}`,
+                `C ${sourceX + controlOffset} ${sourceY},`,
+                `${targetX - controlOffset} ${targetY},`,
+                `${targetX} ${targetY}`,
+              ].join(' ');
 
-                return (
-                  <path
-                    key={edge.id}
-                    d={pathData}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    markerEnd="url(#arrow)"
-                    className="text-muted-foreground/40"
-                  />
-                );
+              return (
+                <path
+                  key={edge.id}
+                  d={pathData}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  markerEnd="url(#arrow)"
+                  className="text-muted-foreground/40"
+                />
+              );
             })}
           </svg>
 

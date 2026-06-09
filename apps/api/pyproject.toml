@@ -13,11 +13,20 @@ dependencies = [
   "python-multipart>=0.0.9",
 ]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project.optional-dependencies]
 dev = [
   "httpx>=0.28.0",
   "pytest>=9.0.0",
+  "ruff>=0.8.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*", "tests*"]
 
 [tool.ruff]
 line-length = 100
