@@ -30,6 +30,11 @@ const shot: Shot = {
   imageUrl: 'https://example.com/image.png',
 };
 
+const shotWithVideo: Shot = {
+  ...shot,
+  videoUrl: 'https://example.com/video.mp4',
+};
+
 function makeNode(
   nodeType: CanvasNode['nodeType'],
   refId: string | undefined,
@@ -82,8 +87,11 @@ describe('canvas node details', () => {
         { label: '时长', value: '4s' },
         { label: '提示词', value: 'A child walks through the crowd at an old station' },
         { label: '台词', value: '妈妈，我回来了。' },
+        { label: '图片结果', value: '已生成', kind: 'asset_result', assetType: 'image', url: 'https://example.com/image.png' },
+        { label: '视频结果', value: '未生成', kind: 'asset_result', assetType: 'video' },
       ]),
     });
+    expect(details.rows.find(row => row.label === '图片结果')?.value).not.toContain('https://');
     expect(details.rows.map(row => row.label)).not.toEqual(expect.arrayContaining([
       '节点 ID',
       '关联 ID',
@@ -128,8 +136,8 @@ describe('canvas node details', () => {
         {
           title: '生成结果',
           rows: [
-            { label: '图片结果', value: 'https://example.com/image.png' },
-            { label: '视频结果', value: '未生成' },
+            { label: '图片结果', value: '已生成', kind: 'asset_result', assetType: 'image', url: 'https://example.com/image.png' },
+            { label: '视频结果', value: '未生成', kind: 'asset_result', assetType: 'video' },
           ],
         },
       ]),
@@ -171,7 +179,20 @@ describe('canvas node details', () => {
     expect(copyText).toContain('镜头: 镜头 2: 孩子穿过人群');
     expect(copyText).toContain('景别: wide');
     expect(copyText).toContain('提示词: A child walks through the crowd at an old station');
+    expect(copyText).toContain('图片结果: 已生成');
+    expect(copyText).not.toContain('https://example.com/image.png');
     expect(copyText).not.toContain('节点 ID');
     expect(copyText).not.toContain('shot-node');
+  });
+
+  it('summarizes generated video results without exposing URLs as row values', () => {
+    const details = buildCanvasNodeDialogDetails(makeNode('shot', shot.id), [scene], [shotWithVideo]);
+    const generatedSection = details.sections.find(section => section.title === '生成结果');
+
+    expect(generatedSection?.rows).toEqual([
+      { label: '图片结果', value: '已生成', kind: 'asset_result', assetType: 'image', url: 'https://example.com/image.png' },
+      { label: '视频结果', value: '已生成', kind: 'asset_result', assetType: 'video', url: 'https://example.com/video.mp4' },
+    ]);
+    expect(formatCanvasNodeDetailsForCopy(details)).not.toContain('https://example.com/video.mp4');
   });
 });

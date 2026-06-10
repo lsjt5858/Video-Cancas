@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../components/ui/resizable';
 import { Separator } from '../components/ui/separator';
 import { Textarea } from '../components/ui/textarea';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, ImageIcon, Save, Video } from 'lucide-react';
 import ScriptEditor from '../components/ScriptEditor';
 import ShotList from '../components/ShotList';
 import CanvasView from '../components/CanvasView';
@@ -31,6 +31,7 @@ import TimelineView from '../components/TimelineView';
 import {
   buildCanvasNodeDialogDetails,
   CanvasNodeDialogDetails,
+  CanvasNodeDetailRow,
   formatCanvasNodeDetailsForCopy,
   getCanvasNodeDetails,
 } from '../lib/canvasNodeDetails';
@@ -503,10 +504,7 @@ function CanvasNodeInspector({
 
       <div className="space-y-3">
         {details.rows.map(row => (
-          <div key={row.label} className="rounded-md border bg-background p-3">
-            <div className="text-xs text-muted-foreground">{row.label}</div>
-            <div className="mt-1 break-words text-sm">{row.value}</div>
-          </div>
+          <CanvasNodeDetailRowView key={row.label} row={row} compact />
         ))}
       </div>
 
@@ -551,12 +549,7 @@ function CanvasNodeDetailDialog({
               <h4 className="mb-3 text-sm font-medium">{section.title}</h4>
               <div className="space-y-3">
                 {section.rows.map(row => (
-                  <div key={`${section.title}-${row.label}`}>
-                    <div className="text-xs text-muted-foreground">{row.label}</div>
-                    <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
-                      {row.value}
-                    </div>
-                  </div>
+                  <CanvasNodeDetailRowView key={`${section.title}-${row.label}`} row={row} />
                 ))}
               </div>
             </section>
@@ -568,6 +561,92 @@ function CanvasNodeDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CanvasNodeDetailRowView({
+  row,
+  compact = false,
+}: {
+  row: CanvasNodeDetailRow;
+  compact?: boolean;
+}) {
+  if (row.kind === 'asset_result') {
+    return <AssetResultCard row={row} compact={compact} />;
+  }
+
+  return (
+    <div className={compact ? 'rounded-md border bg-background p-3' : undefined}>
+      <div className="text-xs text-muted-foreground">{row.label}</div>
+      <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+        {row.value}
+      </div>
+    </div>
+  );
+}
+
+function AssetResultCard({
+  row,
+  compact,
+}: {
+  row: CanvasNodeDetailRow;
+  compact: boolean;
+}) {
+  const isGenerated = Boolean(row.url);
+  const icon = row.assetType === 'video'
+    ? <Video className="size-4" />
+    : <ImageIcon className="size-4" />;
+
+  return (
+    <div className="rounded-md border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="mt-0.5 rounded-md bg-muted p-1.5 text-muted-foreground">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground">{row.label}</div>
+            <div className="mt-1 flex items-center gap-2">
+              <Badge variant={isGenerated ? 'default' : 'outline'}>
+                {row.value}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {isGenerated ? '可用于后续生成链路' : '等待生成任务产出'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {!compact && row.assetType === 'image' && row.url && (
+        <div className="mt-3 overflow-hidden rounded-md border bg-muted">
+          <img src={row.url} alt={row.label} className="h-36 w-full object-cover" />
+        </div>
+      )}
+
+      {!compact && row.url && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <a href={row.url} target="_blank" rel="noreferrer">
+              <ExternalLink className="size-3.5" />
+              打开链接
+            </a>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void navigator.clipboard.writeText(row.url ?? '').then(() => {
+                toast.success(`${row.label}链接已复制`);
+              });
+            }}
+          >
+            <Copy className="size-3.5" />
+            复制链接
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -4,6 +4,9 @@ import { getCanvasNodePresentation } from './canvasNodePresentation';
 export type CanvasNodeDetailRow = {
   label: string;
   value: string;
+  kind?: 'asset_result';
+  assetType?: 'image' | 'video';
+  url?: string;
 };
 
 export type CanvasNodeDetails = {
@@ -64,8 +67,8 @@ export function getCanvasNodeDetails(
         { label: '时长', value: `${shot.duration}s` },
         { label: '提示词', value: shot.prompt || '未设置' },
         { label: '台词', value: shot.dialogue || '未设置' },
-        { label: '图片结果', value: shot.imageUrl || '未生成' },
-        { label: '视频结果', value: shot.videoUrl || '未生成' },
+        buildAssetResultRow('图片结果', 'image', shot.imageUrl),
+        buildAssetResultRow('视频结果', 'video', shot.videoUrl),
       ],
     };
   }
@@ -128,8 +131,8 @@ export function buildCanvasNodeDialogDetails(
         {
           title: '生成结果',
           rows: [
-            { label: '图片结果', value: shot.imageUrl || '未生成' },
-            { label: '视频结果', value: shot.videoUrl || '未生成' },
+            buildAssetResultRow('图片结果', 'image', shot.imageUrl),
+            buildAssetResultRow('视频结果', 'video', shot.videoUrl),
           ],
         },
       ],
@@ -159,6 +162,20 @@ export function formatCanvasNodeDetailsForCopy(details: CanvasNodeDialogDetails)
       ...section.rows.map(row => `${row.label}: ${row.value}`),
     ]),
   ].join('\n');
+}
+
+function buildAssetResultRow(
+  label: string,
+  assetType: 'image' | 'video',
+  url?: string,
+): CanvasNodeDetailRow {
+  return {
+    label,
+    value: url ? '已生成' : '未生成',
+    kind: 'asset_result',
+    assetType,
+    ...(url ? { url } : {}),
+  };
 }
 
 function getGenericCreatorRows(node: CanvasNode): CanvasNodeDetailRow[] {
