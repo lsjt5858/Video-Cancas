@@ -100,6 +100,21 @@ describe('canvas node details', () => {
     ]));
   });
 
+  it('builds creator-facing details for a prompt node backed by a shot', () => {
+    const details = getCanvasNodeDetails(makeNode('prompt', shot.id), [scene], [shot]);
+
+    expect(details).toMatchObject({
+      title: '镜头 2 提示词',
+      typeLabel: '提示词',
+      description: 'A child walks through the crowd at an old station',
+      rows: expect.arrayContaining([
+        { label: '来源镜头', value: '镜头 2: 孩子穿过人群' },
+        { label: '提示词', value: 'A child walks through the crowd at an old station' },
+        { label: '后续动作', value: '可继续生成图片或视频候选。' },
+      ]),
+    });
+  });
+
   it('falls back to creator-friendly script information when no related entity exists', () => {
     expect(getCanvasNodeDetails(makeNode('script', 'script-1'), [], [])).toMatchObject({
       title: '旧车站重逢',
@@ -147,6 +162,29 @@ describe('canvas node details', () => {
       buildCanvasNodeDialogDetails(makeNode('shot', shot.id), [scene], [shot])
         .sections.flatMap(section => section.rows.map(row => row.label)),
     ).not.toEqual(expect.arrayContaining(['节点 ID', '关联 ID', '位置', '尺寸']));
+  });
+
+  it('builds dialog sections for a prompt node backed by a shot', () => {
+    expect(buildCanvasNodeDialogDetails(makeNode('prompt', shot.id), [scene], [shot])).toMatchObject({
+      title: '镜头 2 提示词',
+      typeLabel: '提示词',
+      sections: [
+        {
+          title: '提示词输入',
+          rows: [
+            { label: '来源镜头', value: '镜头 2: 孩子穿过人群' },
+            { label: '提示词', value: 'A child walks through the crowd at an old station' },
+          ],
+        },
+        {
+          title: '生成准备',
+          rows: [
+            { label: '创作阶段', value: '提示词打磨' },
+            { label: '后续动作', value: '可继续生成图片或视频候选。' },
+          ],
+        },
+      ],
+    });
   });
 
   it('builds dialog sections for a scene node', () => {

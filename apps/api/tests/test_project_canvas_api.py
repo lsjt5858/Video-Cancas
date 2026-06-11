@@ -170,9 +170,13 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     assert ("script", script["id"]) in nodes_by_ref
     assert ("scene", scene["id"]) in nodes_by_ref
     assert ("shot", shot["id"]) in nodes_by_ref
+    assert ("prompt", shot["id"]) in nodes_by_ref
     assert nodes_by_ref[("script", script["id"])]["position"] == {"x": 80, "y": 80}
     assert nodes_by_ref[("scene", scene["id"])]["position"] == {"x": 360, "y": 80}
     assert nodes_by_ref[("shot", shot["id"])]["position"] == {"x": 640, "y": 80}
+    assert nodes_by_ref[("prompt", shot["id"])]["node_type"] == "prompt"
+    assert nodes_by_ref[("prompt", shot["id"])]["title"] == "镜头 1 提示词"
+    assert nodes_by_ref[("prompt", shot["id"])]["data"]["prompt"] == shot["prompt"]
 
     edges_response = client.get(f"/api/projects/{project['id']}/canvas/edges")
     assert edges_response.status_code == 200
@@ -180,6 +184,7 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     script_node = nodes_by_ref[("script", script["id"])]
     scene_node = nodes_by_ref[("scene", scene["id"])]
     shot_node = nodes_by_ref[("shot", shot["id"])]
+    prompt_node = nodes_by_ref[("prompt", shot["id"])]
     assert {
         "source_node_id": script_node["id"],
         "target_node_id": scene_node["id"],
@@ -196,6 +201,18 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
         "source_node_id": scene_node["id"],
         "target_node_id": shot_node["id"],
         "relation_type": "story_flow",
+    } in [
+        {
+            "source_node_id": edge["source_node_id"],
+            "target_node_id": edge["target_node_id"],
+            "relation_type": edge["relation_type"],
+        }
+        for edge in edges
+    ]
+    assert {
+        "source_node_id": shot_node["id"],
+        "target_node_id": prompt_node["id"],
+        "relation_type": "generates",
     } in [
         {
             "source_node_id": edge["source_node_id"],
@@ -273,4 +290,25 @@ def test_deleting_scene_removes_its_canvas_shot_nodes() -> None:
     nodes_after_delete = client.get(f"/api/projects/{project['id']}/canvas/nodes")
     assert nodes_after_delete.status_code == 200
     assert all(node["ref_id"] != scene["id"] for node in nodes_after_delete.json())
+    assert all(node["ref_id"] != shot["id"] for node in nodes_after_delete.json())
+
+
+def test_deleting_shot_removes_its_canvas_and_prompt_nodes() -> None:
+    client = TestClient(app)
+    project = create_project(client)
+    scene = create_scene(client, project["id"])
+    shot = create_shot(client, project["id"], scene["id"])
+
+    nodes_before_delete = client.get(f"/api/projects/{project['id']}/canvas/nodes").json()
+    assert any(node["ref_type"] == "shot" and node["ref_id"] == shot["id"] for node in nodes_before_delete)
+    assert any(
+        node["ref_type"] == "prompt" and node["ref_id"] == shot["id"]
+        for node in nodes_before_delete
+    )
+
+    delete_response = client.delete(f"/api/projects/{project['id']}/shots/{shot['id']}")
+    assert delete_response.status_code == 204
+
+    nodes_after_delete = client.get(f"/api/projects/{project['id']}/canvas/nodes")
+    assert nodes_after_delete.status_code == 200
     assert all(node["ref_id"] != shot["id"] for node in nodes_after_delete.json())

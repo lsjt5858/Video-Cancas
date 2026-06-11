@@ -36,6 +36,19 @@ const nodes: CanvasNode[] = [
     refId: 'shot-1',
     data: {},
   },
+  {
+    id: 'prompt-node',
+    projectId: 'project-1',
+    nodeType: 'prompt',
+    title: '镜头 2 提示词',
+    position: { x: 880, y: 80 },
+    size: { width: 240, height: 160 },
+    refType: 'shot',
+    refId: 'shot-1',
+    data: {
+      prompt: 'A child walks through the crowd at an old station',
+    },
+  },
 ];
 
 const scenes: Scene[] = [
@@ -65,7 +78,7 @@ const shots: Shot[] = [
 ];
 
 describe('canvas search', () => {
-  it('matches scene location, character, shot number, shot prompt, and node title', () => {
+  it('matches scene location, character, shot number, shot prompt, prompt nodes, and node title', () => {
     expect(searchCanvasNodes('旧车站', nodes, scenes, shots).map(result => result.node.id)).toEqual([
       'script-node',
       'scene-node',
@@ -75,9 +88,14 @@ describe('canvas search', () => {
     ]);
     expect(searchCanvasNodes('镜头 2', nodes, scenes, shots).map(result => result.node.id)).toEqual([
       'shot-node',
+      'prompt-node',
     ]);
     expect(searchCanvasNodes('old station', nodes, scenes, shots).map(result => result.node.id)).toEqual([
       'shot-node',
+      'prompt-node',
+    ]);
+    expect(searchCanvasNodes('提示词', nodes, scenes, shots).map(result => result.node.id)).toEqual([
+      'prompt-node',
     ]);
   });
 

@@ -73,6 +73,19 @@ export function getCanvasNodeDetails(
     };
   }
 
+  if (node.nodeType === 'prompt' && shot) {
+    return {
+      title: `镜头 ${shot.shotNumber} 提示词`,
+      typeLabel: presentation.label,
+      description: shot.prompt || String(node.data.prompt || ''),
+      rows: [
+        { label: '来源镜头', value: `镜头 ${shot.shotNumber}: ${shot.description}` },
+        { label: '提示词', value: shot.prompt || String(node.data.prompt || '未设置') },
+        { label: '后续动作', value: '可继续生成图片或视频候选。' },
+      ],
+    };
+  }
+
   return {
     title: node.title || presentation.label,
     typeLabel: presentation.label,
@@ -133,6 +146,29 @@ export function buildCanvasNodeDialogDetails(
           rows: [
             buildAssetResultRow('图片结果', 'image', shot.imageUrl),
             buildAssetResultRow('视频结果', 'video', shot.videoUrl),
+          ],
+        },
+      ],
+      footerNote: '生成历史、候选结果和素材版本待接入。',
+    };
+  }
+
+  if (node.nodeType === 'prompt' && shot) {
+    return {
+      ...details,
+      sections: [
+        {
+          title: '提示词输入',
+          rows: [
+            { label: '来源镜头', value: `镜头 ${shot.shotNumber}: ${shot.description}` },
+            { label: '提示词', value: shot.prompt || String(node.data.prompt || '未设置') },
+          ],
+        },
+        {
+          title: '生成准备',
+          rows: [
+            { label: '创作阶段', value: '提示词打磨' },
+            { label: '后续动作', value: '可继续生成图片或视频候选。' },
           ],
         },
       ],

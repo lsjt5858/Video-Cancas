@@ -168,6 +168,8 @@ def delete_project_scene(
                 & (CanvasNode.ref_id == scene_id)
                 | (CanvasNode.ref_type == "shot")
                 & (CanvasNode.ref_id.in_(shot_ids))
+                | (CanvasNode.ref_type == "prompt")
+                & (CanvasNode.ref_id.in_(shot_ids))
             ),
             )
         )
@@ -235,8 +237,8 @@ def delete_project_shot(
     db.execute(
         delete(CanvasNode).where(
             CanvasNode.project_id == project_id,
-            CanvasNode.ref_type == "shot",
             CanvasNode.ref_id == shot_id,
+            CanvasNode.ref_type.in_(["shot", "prompt"]),
         )
     )
     db.delete(shot)
@@ -472,6 +474,48 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
                 scene_node.id,
                 shot_node.id,
                 "story_flow",
+            ) or has_changes
+
+        prompt_text = shot.prompt.strip()
+        if prompt_text:
+            prompt_node = nodes_by_ref.get(("prompt", shot.id))
+            prompt_title = f"镜头 {shot.shot_number} 提示词"
+            prompt_data = {
+                "shot_id": str(shot.id),
+                "scene_id": str(shot.scene_id),
+                "prompt": prompt_text,
+            }
+            if prompt_node is None:
+                prompt_node = CanvasNode(
+                    project_id=project_id,
+                    node_type="prompt",
+                    title=prompt_title,
+                    position_x=shot_node.position_x + shot_node.width + 80,
+                    position_y=shot_node.position_y,
+                    width=240,
+                    height=160,
+                    ref_type="prompt",
+                    ref_id=shot.id,
+                    data=prompt_data,
+                )
+                db.add(prompt_node)
+                db.flush()
+                nodes_by_ref[("prompt", shot.id)] = prompt_node
+                has_changes = True
+            else:
+                if prompt_node.title != prompt_title:
+                    prompt_node.title = prompt_title
+                    has_changes = True
+                if prompt_node.data != prompt_data:
+                    prompt_node.data = prompt_data
+                    has_changes = True
+
+            has_changes = ensure_canvas_edge(
+                db,
+                project_id,
+                shot_node.id,
+                prompt_node.id,
+                "generates",
             ) or has_changes
 
     if has_changes:

@@ -56,6 +56,14 @@ function buildSearchResult(
     };
   }
 
+  if (node.nodeType === 'prompt' && shot) {
+    return {
+      node,
+      title: node.title || `镜头 ${shot.shotNumber} 提示词`,
+      description: shot.prompt || String(node.data.prompt || ''),
+    };
+  }
+
   return {
     node,
     title: node.title || getCanvasNodePresentation(node.nodeType).label,

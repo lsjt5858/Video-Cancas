@@ -717,6 +717,9 @@ function getSelectedNodeTitle(
   if (node.nodeType === 'shot' && shot) {
     return `镜头 ${shot.shotNumber}: ${shot.description}`;
   }
+  if (node.nodeType === 'prompt' && shot) {
+    return node.title || `镜头 ${shot.shotNumber} 提示词`;
+  }
   return node.title || getCanvasNodePresentation(node.nodeType).label;
 }
 
@@ -732,6 +735,9 @@ function getSelectedNodeDescription(
   }
   if (node.nodeType === 'shot' && shot) {
     return `${shot.shotType} · ${shot.duration}s · ${shot.prompt}`;
+  }
+  if (node.nodeType === 'prompt' && shot) {
+    return shot.prompt || String(node.data.prompt || '未设置提示词');
   }
   return '项目剧本入口，后续可联动角色、场景和镜头节点。';
 }

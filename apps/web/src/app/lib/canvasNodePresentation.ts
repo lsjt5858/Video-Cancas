@@ -22,6 +22,11 @@ const PRESENTATION_BY_TYPE: Partial<Record<CanvasNode['nodeType'], CanvasNodePre
     accentClassName: 'border-l-blue-500',
     badgeClassName: 'bg-blue-50 text-blue-700 border-blue-200',
   },
+  prompt: {
+    label: '提示词',
+    accentClassName: 'border-l-emerald-500',
+    badgeClassName: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
 };
 
 const DEFAULT_PRESENTATION: CanvasNodePresentation = {
