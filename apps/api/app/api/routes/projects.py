@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -28,6 +28,7 @@ from app.schemas.storyboard import (
 )
 
 router = APIRouter()
+CHARACTER_NODE_NAMESPACE = UUID("4d8fd6d6-0e5c-49be-a00c-23674a2f4e43")
 
 
 @router.get("", response_model=list[ProjectRead])
@@ -407,6 +408,7 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
         )
     )
     scene_nodes: dict[UUID, CanvasNode] = {}
+    characters_by_name: dict[str, set[UUID]] = {}
     for index, scene in enumerate(scenes):
         scene_node = nodes_by_ref.get(("scene", scene.id))
         if scene_node is None:
@@ -427,6 +429,10 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
             nodes_by_ref[("scene", scene.id)] = scene_node
             has_changes = True
         scene_nodes[scene.id] = scene_node
+        for character in scene.characters:
+            character_name = character.strip()
+            if character_name:
+                characters_by_name.setdefault(character_name, set()).add(scene.id)
         if script_node:
             has_changes = ensure_canvas_edge(
                 db,
@@ -435,6 +441,50 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
                 scene_node.id,
                 "story_flow",
             ) or has_changes
+
+    for index, (character_name, scene_ids) in enumerate(sorted(characters_by_name.items())):
+        character_ref_id = uuid5(CHARACTER_NODE_NAMESPACE, f"{project_id}:character:{character_name}")
+        character_node = nodes_by_ref.get(("character", character_ref_id))
+        sorted_scene_ids = sorted(str(scene_id) for scene_id in scene_ids)
+        character_data = {
+            "character_name": character_name,
+            "scene_ids": sorted_scene_ids,
+        }
+        if character_node is None:
+            character_node = CanvasNode(
+                project_id=project_id,
+                node_type="character",
+                title=f"角色：{character_name}",
+                position_x=80,
+                position_y=320 + index * 180,
+                width=220,
+                height=140,
+                ref_type="character",
+                ref_id=character_ref_id,
+                data=character_data,
+            )
+            db.add(character_node)
+            db.flush()
+            nodes_by_ref[("character", character_ref_id)] = character_node
+            has_changes = True
+        else:
+            if character_node.title != f"角色：{character_name}":
+                character_node.title = f"角色：{character_name}"
+                has_changes = True
+            if character_node.data != character_data:
+                character_node.data = character_data
+                has_changes = True
+
+        for scene_id in scene_ids:
+            scene_node = scene_nodes.get(scene_id)
+            if scene_node:
+                has_changes = ensure_canvas_edge(
+                    db,
+                    project_id,
+                    character_node.id,
+                    scene_node.id,
+                    "uses_asset",
+                ) or has_changes
 
     shots = db.scalars(
         select(Shot)

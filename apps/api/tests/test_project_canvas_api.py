@@ -171,6 +171,11 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     assert ("scene", scene["id"]) in nodes_by_ref
     assert ("shot", shot["id"]) in nodes_by_ref
     assert ("prompt", shot["id"]) in nodes_by_ref
+    character_nodes = [node for node in nodes if node["node_type"] == "character"]
+    assert len(character_nodes) == 1
+    assert character_nodes[0]["title"] == "角色：母亲"
+    assert character_nodes[0]["data"]["character_name"] == "母亲"
+    assert character_nodes[0]["data"]["scene_ids"] == [scene["id"]]
     assert nodes_by_ref[("script", script["id"])]["position"] == {"x": 80, "y": 80}
     assert nodes_by_ref[("scene", scene["id"])]["position"] == {"x": 360, "y": 80}
     assert nodes_by_ref[("shot", shot["id"])]["position"] == {"x": 640, "y": 80}
@@ -185,6 +190,7 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     scene_node = nodes_by_ref[("scene", scene["id"])]
     shot_node = nodes_by_ref[("shot", shot["id"])]
     prompt_node = nodes_by_ref[("prompt", shot["id"])]
+    character_node = character_nodes[0]
     assert {
         "source_node_id": script_node["id"],
         "target_node_id": scene_node["id"],
@@ -213,6 +219,18 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
         "source_node_id": shot_node["id"],
         "target_node_id": prompt_node["id"],
         "relation_type": "generates",
+    } in [
+        {
+            "source_node_id": edge["source_node_id"],
+            "target_node_id": edge["target_node_id"],
+            "relation_type": edge["relation_type"],
+        }
+        for edge in edges
+    ]
+    assert {
+        "source_node_id": character_node["id"],
+        "target_node_id": scene_node["id"],
+        "relation_type": "uses_asset",
     } in [
         {
             "source_node_id": edge["source_node_id"],
