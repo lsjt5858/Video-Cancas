@@ -22,6 +22,8 @@ import {
   MapPin,
   Link2,
   Search,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
 import { searchCanvasNodes } from '../lib/canvasSearch';
@@ -46,6 +48,7 @@ import {
   getCanvasNodesInSelection,
   normalizeSelectionRect,
 } from '../lib/canvasSelection';
+import { getVisibleCanvasGraph } from '../lib/canvasVisibility';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -92,13 +95,18 @@ export default function CanvasView({
   const [selectionCurrent, setSelectionCurrent] = useState<CanvasPoint | null>(null);
   const [dragStartPoint, setDragStartPoint] = useState<CanvasPoint | null>(null);
   const [dragStartNodes, setDragStartNodes] = useState<CanvasNode[]>([]);
+  const [collapsedSceneIds, setCollapsedSceneIds] = useState<string[]>([]);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const { visibleNodes, visibleEdges } = useMemo(
+    () => getVisibleCanvasGraph(nodes, edges, shots, collapsedSceneIds),
+    [nodes, edges, shots, collapsedSceneIds],
+  );
 
-  const selectedNode = nodes.find(node => node.id === selectedNodeId);
+  const selectedNode = visibleNodes.find(node => node.id === selectedNodeId);
   const selectedShot = selectedNode?.refId
     ? shots.find(shot => shot.id === selectedNode.refId)
     : undefined;
@@ -106,12 +114,12 @@ export default function CanvasView({
     ? scenes.find(scene => scene.id === selectedNode.refId)
     : undefined;
   const searchResults = useMemo(
-    () => searchCanvasNodes(searchQuery, nodes, scenes, shots),
-    [searchQuery, nodes, scenes, shots],
+    () => searchCanvasNodes(searchQuery, visibleNodes, scenes, shots),
+    [searchQuery, visibleNodes, scenes, shots],
   );
   const miniMapLayout = useMemo(
-    () => calculateMiniMapLayout(nodes, MINI_MAP_SIZE),
-    [nodes],
+    () => calculateMiniMapLayout(visibleNodes, MINI_MAP_SIZE),
+    [visibleNodes],
   );
 
   const handleZoomIn = () => {
@@ -129,7 +137,7 @@ export default function CanvasView({
   const handleFitView = () => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setCanvas(calculateFitView(nodes, { width: rect.width, height: rect.height }));
+    setCanvas(calculateFitView(visibleNodes, { width: rect.width, height: rect.height }));
   };
 
   const handleFocusNode = (node: CanvasNode) => {
@@ -155,11 +163,21 @@ export default function CanvasView({
   };
 
   const handleAlignNodes = (direction: CanvasAlignDirection) => {
-    applyNodePositions(calculateAlignedNodePositions(nodes, selectedNodeIds, direction));
+    applyNodePositions(calculateAlignedNodePositions(visibleNodes, selectedNodeIds, direction));
   };
 
   const handleDistributeNodes = (direction: CanvasDistributeDirection) => {
-    applyNodePositions(calculateDistributedNodePositions(nodes, selectedNodeIds, direction));
+    applyNodePositions(calculateDistributedNodePositions(visibleNodes, selectedNodeIds, direction));
+  };
+
+  const handleToggleSceneCollapse = (sceneId: string, nodeId: string) => {
+    setCollapsedSceneIds(prev => (
+      prev.includes(sceneId)
+        ? prev.filter(id => id !== sceneId)
+        : [...prev, sceneId]
+    ));
+    onSelectedNodeIdChange(nodeId);
+    setSelectedNodeIds([nodeId]);
   };
 
   const handleMiniMapClick = (
@@ -205,7 +223,7 @@ export default function CanvasView({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes]);
+  }, [visibleNodes]);
 
   useEffect(() => {
     const syncViewportSize = () => {
@@ -229,7 +247,7 @@ export default function CanvasView({
     }
 
     if (nodeId) {
-      const node = nodes.find(canvasNode => canvasNode.id === nodeId);
+      const node = visibleNodes.find(canvasNode => canvasNode.id === nodeId);
       if (node) {
         setDraggedNode(nodeId);
         onSelectedNodeIdChange(nodeId);
@@ -247,7 +265,7 @@ export default function CanvasView({
             y: canvasY - node.position.y,
           });
           setDragStartPoint(dragPoint);
-          setDragStartNodes(nodes.filter(canvasNode => nextSelectedNodeIds.includes(canvasNode.id)));
+          setDragStartNodes(visibleNodes.filter(canvasNode => nextSelectedNodeIds.includes(canvasNode.id)));
         }
       }
     } else {
@@ -313,7 +331,7 @@ export default function CanvasView({
 
     if (selectionStart && selectionCurrent) {
       const selectionRect = normalizeSelectionRect(selectionStart, selectionCurrent);
-      const selectedIds = getCanvasNodesInSelection(nodes, selectionRect);
+      const selectedIds = getCanvasNodesInSelection(visibleNodes, selectionRect);
       setSelectedNodeIds(selectedIds);
       onSelectedNodeIdChange(selectedIds[0] ?? null);
       setSelectionStart(null);
@@ -327,7 +345,7 @@ export default function CanvasView({
         : [draggedNode];
       void Promise.all(
         nodeIdsToPersist.map((nodeId) => {
-          const node = nodes.find(canvasNode => canvasNode.id === nodeId);
+          const node = visibleNodes.find(canvasNode => canvasNode.id === nodeId);
           return node ? updateCanvasNode(nodeId, { position: node.position }) : Promise.resolve();
         }),
       );
@@ -341,7 +359,7 @@ export default function CanvasView({
   const handleConnectionStart = (e: React.MouseEvent, nodeId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const node = nodes.find(canvasNode => canvasNode.id === nodeId);
+    const node = visibleNodes.find(canvasNode => canvasNode.id === nodeId);
     if (!node) return;
     onSelectedNodeIdChange(nodeId);
     setSelectedNodeIds([nodeId]);
@@ -392,7 +410,7 @@ export default function CanvasView({
   };
 
   const connectionSource = connectingFromNodeId
-    ? nodes.find(node => node.id === connectingFromNodeId)
+    ? visibleNodes.find(node => node.id === connectingFromNodeId)
     : undefined;
   const draftConnectionPath = connectionSource && connectionPointer
     ? buildEdgePath(
@@ -413,6 +431,7 @@ export default function CanvasView({
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
             {nodes.length} 个画布节点
+            {visibleNodes.length !== nodes.length ? ` · 显示 ${visibleNodes.length} 个` : ''}
             {selectedNodeIds.length > 1 ? ` · 已选 ${selectedNodeIds.length} 个` : ''}
           </span>
           <div className="relative w-80">
@@ -510,7 +529,7 @@ export default function CanvasView({
         </div>
         {miniMapLayout && viewportSize.width > 0 && viewportSize.height > 0 && (
           <CanvasMiniMap
-            nodes={nodes}
+            nodes={visibleNodes}
             selectedNodeId={selectedNodeId}
             canvas={canvas}
             viewportSize={viewportSize}
@@ -557,9 +576,9 @@ export default function CanvasView({
               </marker>
             </defs>
             <rect width="100%" height="100%" fill="url(#grid)" />
-            {edges.map((edge) => {
-              const source = nodes.find(node => node.id === edge.sourceNodeId);
-              const target = nodes.find(node => node.id === edge.targetNodeId);
+            {visibleEdges.map((edge) => {
+              const source = visibleNodes.find(node => node.id === edge.sourceNodeId);
+              const target = visibleNodes.find(node => node.id === edge.targetNodeId);
               if (!source || !target) return null;
 
               const sourceX = source.position.x + source.size.width;
@@ -593,7 +612,14 @@ export default function CanvasView({
           </svg>
 
           {/* Canvas nodes */}
-          {nodes.map((node) => {
+          {visibleNodes.map((node) => {
+            const scene = node.refId ? scenes.find(item => item.id === node.refId) : undefined;
+            const shot = node.refId ? shots.find(item => item.id === node.refId) : undefined;
+            const isSceneCollapsed = Boolean(scene && collapsedSceneIds.includes(scene.id));
+            const collapsedShotCount = scene
+              ? shots.filter(item => item.sceneId === scene.id).length
+              : 0;
+
             return (
               <div
                 key={node.id}
@@ -618,8 +644,11 @@ export default function CanvasView({
                 <CanvasNodeCard
                   node={node}
                   isSelected={selectedNodeId === node.id || selectedNodeIds.includes(node.id)}
-                  scene={node.refId ? scenes.find(item => item.id === node.refId) : undefined}
-                  shot={node.refId ? shots.find(item => item.id === node.refId) : undefined}
+                  scene={scene}
+                  shot={shot}
+                  isSceneCollapsed={isSceneCollapsed}
+                  collapsedShotCount={collapsedShotCount}
+                  onToggleSceneCollapse={handleToggleSceneCollapse}
                   onConnectionStart={handleConnectionStart}
                   onMenuAction={onNodeContextMenuAction}
                 />
@@ -753,6 +782,9 @@ function CanvasNodeCard({
   isSelected,
   scene,
   shot,
+  isSceneCollapsed,
+  collapsedShotCount,
+  onToggleSceneCollapse,
   onConnectionStart,
   onMenuAction,
 }: {
@@ -760,6 +792,9 @@ function CanvasNodeCard({
   isSelected: boolean;
   scene?: Scene;
   shot?: Shot;
+  isSceneCollapsed: boolean;
+  collapsedShotCount: number;
+  onToggleSceneCollapse: (sceneId: string, nodeId: string) => void;
   onConnectionStart: (e: React.MouseEvent, nodeId: string) => void;
   onMenuAction: (action: CanvasNodeContextMenuAction, node: CanvasNode) => void;
 }) {
@@ -786,6 +821,30 @@ function CanvasNodeCard({
           >
             <Link2 className="size-3" />
           </button>
+          {scene && (
+            <button
+              type="button"
+              title={isSceneCollapsed ? '展开场景镜头' : '折叠场景镜头'}
+              aria-label={isSceneCollapsed ? '展开场景镜头' : '折叠场景镜头'}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggleSceneCollapse(scene.id, node.id);
+              }}
+              className="absolute right-2 top-2 flex items-center gap-1 rounded border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground shadow-sm hover:border-primary hover:text-primary"
+            >
+              {isSceneCollapsed ? (
+                <ChevronRight className="size-3" />
+              ) : (
+                <ChevronDown className="size-3" />
+              )}
+              {collapsedShotCount}
+            </button>
+          )}
           <div className="flex items-start justify-between mb-2">
             <Badge variant="outline" className={`text-xs ${presentation.badgeClassName}`}>
               {presentation.label}
