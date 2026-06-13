@@ -12,6 +12,9 @@ export type CanvasSelectionRect = {
   height: number;
 };
 
+export type CanvasAlignDirection = 'left' | 'top';
+export type CanvasDistributeDirection = 'horizontal' | 'vertical';
+
 export function normalizeSelectionRect(
   start: CanvasPoint,
   end: CanvasPoint,
@@ -59,6 +62,68 @@ export function applyNodeSelectionDelta(
         },
       ]),
   );
+}
+
+export function calculateAlignedNodePositions(
+  nodes: CanvasNode[],
+  selectedNodeIds: string[],
+  direction: CanvasAlignDirection,
+): Record<string, CanvasPoint> {
+  const selectedNodes = getSelectedNodes(nodes, selectedNodeIds);
+  if (selectedNodes.length < 2) {
+    return {};
+  }
+
+  if (direction === 'left') {
+    const left = Math.min(...selectedNodes.map(node => node.position.x));
+    return Object.fromEntries(
+      selectedNodes.map(node => [
+        node.id,
+        { x: left, y: node.position.y },
+      ]),
+    );
+  }
+
+  const top = Math.min(...selectedNodes.map(node => node.position.y));
+  return Object.fromEntries(
+    selectedNodes.map(node => [
+      node.id,
+      { x: node.position.x, y: top },
+    ]),
+  );
+}
+
+export function calculateDistributedNodePositions(
+  nodes: CanvasNode[],
+  selectedNodeIds: string[],
+  direction: CanvasDistributeDirection,
+): Record<string, CanvasPoint> {
+  const selectedNodes = getSelectedNodes(nodes, selectedNodeIds);
+  if (selectedNodes.length < 3) {
+    return {};
+  }
+
+  const axis = direction === 'horizontal' ? 'x' : 'y';
+  const sortedNodes = [...selectedNodes].sort((first, second) => (
+    first.position[axis] - second.position[axis]
+  ));
+  const firstPosition = sortedNodes[0].position[axis];
+  const lastPosition = sortedNodes[sortedNodes.length - 1].position[axis];
+  const gap = (lastPosition - firstPosition) / (sortedNodes.length - 1);
+
+  return Object.fromEntries(
+    sortedNodes.map((node, index) => [
+      node.id,
+      axis === 'x'
+        ? { x: firstPosition + gap * index, y: node.position.y }
+        : { x: node.position.x, y: firstPosition + gap * index },
+    ]),
+  );
+}
+
+function getSelectedNodes(nodes: CanvasNode[], selectedNodeIds: string[]): CanvasNode[] {
+  const selectedIds = new Set(selectedNodeIds);
+  return nodes.filter(node => selectedIds.has(node.id));
 }
 
 function rectsIntersect(first: CanvasSelectionRect, second: CanvasSelectionRect): boolean {

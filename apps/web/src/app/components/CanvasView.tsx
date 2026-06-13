@@ -38,6 +38,10 @@ import {
 } from '../lib/canvasViewport';
 import {
   applyNodeSelectionDelta,
+  calculateAlignedNodePositions,
+  calculateDistributedNodePositions,
+  CanvasAlignDirection,
+  CanvasDistributeDirection,
   CanvasPoint,
   getCanvasNodesInSelection,
   normalizeSelectionRect,
@@ -136,6 +140,26 @@ export default function CanvasView({
     setSelectedNodeIds([node.id]);
     setCanvas(calculateFocusedView(node, { width: rect.width, height: rect.height }, canvas.scale));
     setSearchQuery('');
+  };
+
+  const applyNodePositions = (positionsByNodeId: Record<string, CanvasPoint>) => {
+    Object.entries(positionsByNodeId).forEach(([nodeId, position]) => {
+      moveCanvasNodeLocally(nodeId, position);
+    });
+
+    void Promise.all(
+      Object.entries(positionsByNodeId).map(([nodeId, position]) => (
+        updateCanvasNode(nodeId, { position })
+      )),
+    );
+  };
+
+  const handleAlignNodes = (direction: CanvasAlignDirection) => {
+    applyNodePositions(calculateAlignedNodePositions(nodes, selectedNodeIds, direction));
+  };
+
+  const handleDistributeNodes = (direction: CanvasDistributeDirection) => {
+    applyNodePositions(calculateDistributedNodePositions(nodes, selectedNodeIds, direction));
   };
 
   const handleMiniMapClick = (
@@ -428,6 +452,46 @@ export default function CanvasView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {selectedNodeIds.length > 1 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleAlignNodes('left')}
+                title="左对齐选中节点"
+              >
+                左对齐
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleAlignNodes('top')}
+                title="顶部对齐选中节点"
+              >
+                上对齐
+              </Button>
+            </>
+          )}
+          {selectedNodeIds.length > 2 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDistributeNodes('horizontal')}
+                title="水平分布选中节点"
+              >
+                水平分布
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDistributeNodes('vertical')}
+                title="垂直分布选中节点"
+              >
+                垂直分布
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" onClick={handleZoomOut}>
             <ZoomOut className="size-4" />
           </Button>
