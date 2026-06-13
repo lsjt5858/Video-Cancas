@@ -26,6 +26,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
+import { getCanvasEdgePresentation } from '../lib/canvasEdgePresentation';
 import { searchCanvasNodes } from '../lib/canvasSearch';
 import {
   CanvasNodeContextMenuAction,
@@ -660,6 +661,7 @@ export default function CanvasView({
               const targetX = target.position.x;
               const targetY = target.position.y + target.size.height / 2;
               const pathData = buildEdgePath(sourceX, sourceY, targetX, targetY);
+              const presentation = getCanvasEdgePresentation(edge.relationType);
 
               return (
                 <path
@@ -668,8 +670,9 @@ export default function CanvasView({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
+                  strokeDasharray={presentation.strokeDasharray}
                   markerEnd="url(#arrow)"
-                  className="text-muted-foreground/40"
+                  className={presentation.className}
                 />
               );
             })}
