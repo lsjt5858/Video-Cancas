@@ -1,3 +1,4 @@
+import re
 from uuid import UUID, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -30,6 +31,8 @@ from app.schemas.storyboard import (
 router = APIRouter()
 CHARACTER_NODE_NAMESPACE = UUID("4d8fd6d6-0e5c-49be-a00c-23674a2f4e43")
 LOCATION_NODE_NAMESPACE = UUID("384d5ce6-3eb2-4c39-8d0e-86b0e81de7da")
+PROP_NODE_NAMESPACE = UUID("f8a8a7e8-d9e4-42ff-b12d-98c816fdc73c")
+PROP_MARKER_PATTERN = re.compile(r"(?:道具|props?)\s*[：:]\s*([^。；;\n]+)", re.IGNORECASE)
 
 
 @router.get("", response_model=list[ProjectRead])
@@ -411,6 +414,7 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
     scene_nodes: dict[UUID, CanvasNode] = {}
     characters_by_name: dict[str, set[UUID]] = {}
     locations_by_name: dict[str, set[UUID]] = {}
+    props_by_name: dict[str, dict[str, set[UUID]]] = {}
     for index, scene in enumerate(scenes):
         scene_node = nodes_by_ref.get(("scene", scene.id))
         if scene_node is None:
@@ -438,6 +442,9 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
         location_name = scene.location.strip() if scene.location else ""
         if location_name:
             locations_by_name.setdefault(location_name, set()).add(scene.id)
+        for prop_name in extract_prop_names(scene.description):
+            prop_data = props_by_name.setdefault(prop_name, {"scene_ids": set(), "shot_ids": set()})
+            prop_data["scene_ids"].add(scene.id)
         if script_node:
             has_changes = ensure_canvas_edge(
                 db,
@@ -535,11 +542,70 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
                     "uses_asset",
                 ) or has_changes
 
-    shots = db.scalars(
+    shots = list(db.scalars(
         select(Shot)
         .where(Shot.project_id == project_id)
         .order_by(Shot.scene_id.asc(), Shot.shot_number.asc(), Shot.id.asc())
-    )
+    ))
+
+    for shot in shots:
+        shot_text = "\n".join(
+            value for value in [
+                shot.description,
+                shot.prompt,
+                shot.dialogue or "",
+            ]
+            if value
+        )
+        for prop_name in extract_prop_names(shot_text):
+            prop_data = props_by_name.setdefault(prop_name, {"scene_ids": set(), "shot_ids": set()})
+            prop_data["shot_ids"].add(shot.id)
+
+    for index, (prop_name, prop_refs) in enumerate(sorted(props_by_name.items())):
+        prop_ref_id = uuid5(PROP_NODE_NAMESPACE, f"{project_id}:prop:{prop_name}")
+        prop_node = nodes_by_ref.get(("prop", prop_ref_id))
+        sorted_scene_ids = sorted(str(scene_id) for scene_id in prop_refs["scene_ids"])
+        sorted_shot_ids = sorted(str(shot_id) for shot_id in prop_refs["shot_ids"])
+        prop_data = {
+            "prop_name": prop_name,
+            "scene_ids": sorted_scene_ids,
+            "shot_ids": sorted_shot_ids,
+        }
+        if prop_node is None:
+            prop_node = CanvasNode(
+                project_id=project_id,
+                node_type="prop",
+                title=f"道具：{prop_name}",
+                position_x=80,
+                position_y=720 + index * 180,
+                width=220,
+                height=140,
+                ref_type="prop",
+                ref_id=prop_ref_id,
+                data=prop_data,
+            )
+            db.add(prop_node)
+            db.flush()
+            nodes_by_ref[("prop", prop_ref_id)] = prop_node
+            has_changes = True
+        else:
+            if prop_node.title != f"道具：{prop_name}":
+                prop_node.title = f"道具：{prop_name}"
+                has_changes = True
+            if prop_node.data != prop_data:
+                prop_node.data = prop_data
+                has_changes = True
+
+        for scene_id in prop_refs["scene_ids"]:
+            scene_node = scene_nodes.get(scene_id)
+            if scene_node:
+                has_changes = ensure_canvas_edge(
+                    db,
+                    project_id,
+                    prop_node.id,
+                    scene_node.id,
+                    "uses_asset",
+                ) or has_changes
 
     for index, shot in enumerate(shots):
         shot_node = nodes_by_ref.get(("shot", shot.id))
@@ -574,6 +640,17 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
                 shot_node.id,
                 "story_flow",
             ) or has_changes
+        for prop_name in extract_prop_names("\n".join([shot.description, shot.prompt, shot.dialogue or ""])):
+            prop_ref_id = uuid5(PROP_NODE_NAMESPACE, f"{project_id}:prop:{prop_name}")
+            prop_node = nodes_by_ref.get(("prop", prop_ref_id))
+            if prop_node:
+                has_changes = ensure_canvas_edge(
+                    db,
+                    project_id,
+                    prop_node.id,
+                    shot_node.id,
+                    "uses_asset",
+                ) or has_changes
 
         prompt_text = shot.prompt.strip()
         if prompt_text:
@@ -619,6 +696,17 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
 
     if has_changes:
         db.commit()
+
+
+def extract_prop_names(text: str) -> list[str]:
+    prop_names: list[str] = []
+    for match in PROP_MARKER_PATTERN.finditer(text):
+        raw_names = match.group(1)
+        for name in re.split(r"[,，、/]", raw_names):
+            prop_name = name.strip()
+            if prop_name and prop_name not in prop_names:
+                prop_names.append(prop_name)
+    return prop_names
 
 
 def ensure_canvas_edge(

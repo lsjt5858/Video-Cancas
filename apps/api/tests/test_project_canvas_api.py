@@ -115,7 +115,7 @@ def create_scene(client: TestClient, project_id: str) -> dict:
         f"/api/projects/{project_id}/scenes",
         json={
             "scene_number": 1,
-            "description": "旧车站",
+            "description": "旧车站。道具：怀表",
             "location": "站台",
             "time_of_day": "黄昏",
             "characters": ["母亲"],
@@ -143,7 +143,7 @@ def create_shot(client: TestClient, project_id: str, scene_id: str) -> dict:
         json={
             "scene_id": scene_id,
             "shot_number": 1,
-            "description": "母亲站在旧车站月台",
+            "description": "母亲站在旧车站月台，道具：旧皮箱",
             "shot_type": "wide",
             "camera_movement": "static",
             "duration": 4,
@@ -181,6 +181,15 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     assert location_nodes[0]["title"] == "地点：站台"
     assert location_nodes[0]["data"]["location_name"] == "站台"
     assert location_nodes[0]["data"]["scene_ids"] == [scene["id"]]
+    prop_nodes = sorted(
+        [node for node in nodes if node["node_type"] == "prop"],
+        key=lambda node: node["title"],
+    )
+    assert [node["title"] for node in prop_nodes] == ["道具：怀表", "道具：旧皮箱"]
+    assert prop_nodes[0]["data"]["prop_name"] == "怀表"
+    assert prop_nodes[0]["data"]["scene_ids"] == [scene["id"]]
+    assert prop_nodes[1]["data"]["prop_name"] == "旧皮箱"
+    assert prop_nodes[1]["data"]["shot_ids"] == [shot["id"]]
     assert nodes_by_ref[("script", script["id"])]["position"] == {"x": 80, "y": 80}
     assert nodes_by_ref[("scene", scene["id"])]["position"] == {"x": 360, "y": 80}
     assert nodes_by_ref[("shot", shot["id"])]["position"] == {"x": 640, "y": 80}
@@ -197,6 +206,7 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     prompt_node = nodes_by_ref[("prompt", shot["id"])]
     character_node = character_nodes[0]
     location_node = location_nodes[0]
+    watch_node, suitcase_node = prop_nodes
     assert {
         "source_node_id": script_node["id"],
         "target_node_id": scene_node["id"],
@@ -248,6 +258,30 @@ def test_canvas_syncs_script_scene_and_shot_nodes_with_story_flow_edges() -> Non
     assert {
         "source_node_id": location_node["id"],
         "target_node_id": scene_node["id"],
+        "relation_type": "uses_asset",
+    } in [
+        {
+            "source_node_id": edge["source_node_id"],
+            "target_node_id": edge["target_node_id"],
+            "relation_type": edge["relation_type"],
+        }
+        for edge in edges
+    ]
+    assert {
+        "source_node_id": watch_node["id"],
+        "target_node_id": scene_node["id"],
+        "relation_type": "uses_asset",
+    } in [
+        {
+            "source_node_id": edge["source_node_id"],
+            "target_node_id": edge["target_node_id"],
+            "relation_type": edge["relation_type"],
+        }
+        for edge in edges
+    ]
+    assert {
+        "source_node_id": suitcase_node["id"],
+        "target_node_id": shot_node["id"],
         "relation_type": "uses_asset",
     } in [
         {

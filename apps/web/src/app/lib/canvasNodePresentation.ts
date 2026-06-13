@@ -32,6 +32,11 @@ const PRESENTATION_BY_TYPE: Partial<Record<CanvasNode['nodeType'], CanvasNodePre
     accentClassName: 'border-l-amber-500',
     badgeClassName: 'bg-amber-50 text-amber-700 border-amber-200',
   },
+  prop: {
+    label: '道具',
+    accentClassName: 'border-l-orange-500',
+    badgeClassName: 'bg-orange-50 text-orange-700 border-orange-200',
+  },
   prompt: {
     label: '提示词',
     accentClassName: 'border-l-emerald-500',
