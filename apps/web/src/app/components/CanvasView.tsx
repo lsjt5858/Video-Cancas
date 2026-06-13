@@ -88,6 +88,7 @@ export default function CanvasView({
     getScenesByProject,
     getShotsByProject,
     createCanvasNode,
+    deleteCanvasNode,
     createCanvasEdge,
     moveCanvasNodeLocally,
     updateCanvasNode,
@@ -201,6 +202,17 @@ export default function CanvasView({
     setBlankMenu(null);
     onSelectedNodeIdChange(node.id);
     setSelectedNodeIds([node.id]);
+  };
+
+  const handleDeleteSelectedNodes = async () => {
+    const nodeIdsToDelete = selectedNodeIds.filter(nodeId => (
+      visibleNodes.some(node => node.id === nodeId)
+    ));
+    if (nodeIdsToDelete.length === 0) return;
+
+    await Promise.all(nodeIdsToDelete.map(nodeId => deleteCanvasNode(nodeId)));
+    setSelectedNodeIds([]);
+    onSelectedNodeIdChange(null);
   };
 
   const handleMiniMapClick = (
@@ -524,6 +536,14 @@ export default function CanvasView({
                 title="顶部对齐选中节点"
               >
                 上对齐
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteSelectedNodes}
+                title="删除选中节点"
+              >
+                删除选中
               </Button>
             </>
           )}

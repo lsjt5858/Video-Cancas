@@ -344,6 +344,19 @@ def test_canvas_edges_can_be_created_between_project_nodes() -> None:
     assert list_response.status_code == 200
     assert list_response.json() == [edge]
 
+    delete_node_response = client.delete(
+        f"/api/projects/{project['id']}/canvas/nodes/{first_node['id']}"
+    )
+    assert delete_node_response.status_code == 204
+
+    edges_after_delete = client.get(f"/api/projects/{project['id']}/canvas/edges")
+    assert edges_after_delete.status_code == 200
+    assert edges_after_delete.json() == []
+
+    nodes_after_delete = client.get(f"/api/projects/{project['id']}/canvas/nodes")
+    assert nodes_after_delete.status_code == 200
+    assert all(node["id"] != first_node["id"] for node in nodes_after_delete.json())
+
 
 def test_deleting_scene_removes_its_canvas_shot_nodes() -> None:
     client = TestClient(app)

@@ -51,6 +51,7 @@ interface AppContextType {
     projectId: string,
     input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
   ) => Promise<CanvasEdge>;
+  deleteCanvasNode: (id: string) => Promise<void>;
   updateCanvasNode: (id: string, updates: Partial<CanvasNode>) => Promise<void>;
   moveCanvasNodeLocally: (id: string, position: CanvasNode['position']) => void;
   
@@ -245,6 +246,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newEdge;
   };
 
+  const deleteCanvasNode = async (id: string) => {
+    const node = canvasNodes.find(canvasNode => canvasNode.id === id);
+    if (!node) return;
+    await api.deleteCanvasNode(node.projectId, id);
+    setCanvasNodes(prev => prev.filter(canvasNode => canvasNode.id !== id));
+    setCanvasEdges(prev => prev.filter(edge => (
+      edge.sourceNodeId !== id && edge.targetNodeId !== id
+    )));
+  };
+
   const updateCanvasNode = async (id: string, updates: Partial<CanvasNode>) => {
     const node = canvasNodes.find(canvasNode => canvasNode.id === id);
     if (!node) return;
@@ -379,8 +390,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getShotsByScene,
       getCanvasNodesByProject,
       getCanvasEdgesByProject,
-    createCanvasNode,
+      createCanvasNode,
       createCanvasEdge,
+      deleteCanvasNode,
       updateCanvasNode,
       moveCanvasNodeLocally,
       createAsset,

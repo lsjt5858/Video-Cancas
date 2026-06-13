@@ -314,6 +314,18 @@ def update_project_canvas_node(
     return serialize_canvas_node(node)
 
 
+@router.delete("/{project_id}/canvas/nodes/{node_id}", status_code=204)
+def delete_project_canvas_node(
+    project_id: UUID,
+    node_id: UUID,
+    db: Session = Depends(get_db),
+) -> None:
+    ensure_project_exists(project_id, db)
+    node = get_project_canvas_node_or_404(project_id, node_id, db)
+    db.delete(node)
+    db.commit()
+
+
 @router.get("/{project_id}/canvas/edges", response_model=list[CanvasEdgeRead])
 def list_project_canvas_edges(project_id: UUID, db: Session = Depends(get_db)) -> list[CanvasEdge]:
     ensure_project_exists(project_id, db)

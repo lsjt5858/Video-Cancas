@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createCanvasNode,
   createCanvasEdge,
+  deleteCanvasNode,
   mapCanvasEdgeFromApi,
   mapCanvasNodeFromApi,
   mapProjectFromApi,
@@ -178,6 +179,24 @@ describe('canvas edge API', () => {
           ref_id: undefined,
           data: { source: 'blank_menu' },
         }),
+      }),
+    );
+  });
+
+  it('deletes a canvas node', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => undefined,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(deleteCanvasNode('project-1', 'node-1')).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project-1/canvas/nodes/node-1',
+      expect.objectContaining({
+        method: 'DELETE',
       }),
     );
   });

@@ -322,6 +322,12 @@ export async function updateCanvasNode(
   return mapCanvasNodeFromApi(node);
 }
 
+export async function deleteCanvasNode(projectId: string, nodeId: string): Promise<void> {
+  await apiFetch<void>(`/projects/${projectId}/canvas/nodes/${nodeId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listCanvasEdges(projectId: string): Promise<CanvasEdge[]> {
   const edges = await apiFetch<ApiCanvasEdge[]>(`/projects/${projectId}/canvas/edges`);
   return edges.map(mapCanvasEdgeFromApi);
