@@ -22,37 +22,41 @@ export function createStoryboardGenerationPlan(projectId: string): StoryboardGen
       timeOfDay: '白天',
       characters: ['主角'],
     },
-    shots: [
-      {
-        projectId,
-        shotNumber: 1,
-        description: '城市全景，建筑林立',
-        shotType: 'wide',
-        cameraMovement: 'static',
-        duration: 3,
-        prompt: 'Wide shot of modern city skyline, bright daylight, cinematic',
-        position: { x: 100, y: 100 },
-      },
-      {
-        projectId,
-        shotNumber: 2,
-        description: '主角走在街道上',
-        shotType: 'medium',
-        cameraMovement: 'tracking',
-        duration: 5,
-        prompt: 'Medium shot of person walking on city street, following camera movement',
-        position: { x: 300, y: 100 },
-      },
-      {
-        projectId,
-        shotNumber: 3,
-        description: '主角特写，表情坚定',
-        shotType: 'close-up',
-        cameraMovement: 'static',
-        duration: 4,
-        prompt: 'Close-up portrait of determined person, cinematic lighting',
-        position: { x: 500, y: 100 },
-      },
-    ],
+    shots: createStoryboardShotPlan(projectId, 1),
   };
+}
+
+export function createStoryboardShotPlan(projectId: string, startShotNumber = 1): GeneratedShot[] {
+  return [
+    {
+      projectId,
+      shotNumber: startShotNumber,
+      description: '城市全景，建筑林立',
+      shotType: 'wide',
+      cameraMovement: 'static',
+      duration: 3,
+      prompt: 'Wide shot of modern city skyline, bright daylight, cinematic',
+      position: { x: 100, y: 100 },
+    },
+    {
+      projectId,
+      shotNumber: startShotNumber + 1,
+      description: '主角走在街道上',
+      shotType: 'medium',
+      cameraMovement: 'tracking',
+      duration: 5,
+      prompt: 'Medium shot of person walking on city street, following camera movement',
+      position: { x: 300, y: 100 },
+    },
+    {
+      projectId,
+      shotNumber: startShotNumber + 2,
+      description: '主角特写，表情坚定',
+      shotType: 'close-up',
+      cameraMovement: 'static',
+      duration: 4,
+      prompt: 'Close-up portrait of determined person, cinematic lighting',
+      position: { x: 500, y: 100 },
+    },
+  ];
 }

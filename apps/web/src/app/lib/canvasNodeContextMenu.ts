@@ -3,6 +3,7 @@ import { CanvasNode } from '../types';
 export type CanvasNodeContextMenuAction =
   | 'view_details'
   | 'copy_info'
+  | 'generate_storyboard'
   | 'generate_image'
   | 'generate_video'
   | 'delete_node';
@@ -18,6 +19,10 @@ export function getCanvasNodeContextMenuItems(node: CanvasNode): CanvasNodeConte
     { action: 'view_details', label: '查看详情', disabled: false },
     { action: 'copy_info', label: '复制节点信息', disabled: false },
   ];
+
+  if (node.nodeType === 'script' || node.nodeType === 'scene') {
+    items.push({ action: 'generate_storyboard', label: '批量生成分镜', disabled: false });
+  }
 
   if (node.nodeType === 'shot' || node.nodeType === 'prompt') {
     items.push(

@@ -43,4 +43,17 @@ describe('canvas node context menu', () => {
       'delete_node',
     ]);
   });
+
+  it('enables storyboard generation for script and scene nodes', () => {
+    expect(getCanvasNodeContextMenuItems(makeNode('script'))).toEqual(
+      expect.arrayContaining([
+        { action: 'generate_storyboard', label: '批量生成分镜', disabled: false },
+      ]),
+    );
+    expect(getCanvasNodeContextMenuItems(makeNode('scene'))).toEqual(
+      expect.arrayContaining([
+        { action: 'generate_storyboard', label: '批量生成分镜', disabled: false },
+      ]),
+    );
+  });
 });

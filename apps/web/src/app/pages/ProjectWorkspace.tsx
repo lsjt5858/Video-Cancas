@@ -36,6 +36,10 @@ import {
   getCanvasNodeDetails,
 } from '../lib/canvasNodeDetails';
 import { CanvasNodeContextMenuAction } from '../lib/canvasNodeContextMenu';
+import {
+  createStoryboardGenerationPlan,
+  createStoryboardShotPlan,
+} from '../lib/storyboardGeneration';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
 import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
@@ -50,6 +54,8 @@ export default function ProjectWorkspace() {
     getCanvasNodesByProject,
     getScenesByProject,
     getShotsByProject,
+    createScene,
+    createShot,
     deleteCanvasNode,
     updateScene,
     updateShot,
@@ -131,6 +137,23 @@ export default function ProjectWorkspace() {
       await deleteCanvasNode(node.id);
       setSelectedCanvasNodeId(null);
       toast.success('节点已删除');
+      return;
+    }
+
+    if (action === 'generate_storyboard') {
+      try {
+        const generatedCount = await generateStoryboardFromCanvasNode(
+          node,
+          project.id,
+          scenes,
+          shots,
+          createScene,
+          createShot,
+        );
+        toast.success(`已生成 ${generatedCount} 个分镜`);
+      } catch (error) {
+        toast.error('生成分镜失败');
+      }
       return;
     }
 
@@ -691,6 +714,40 @@ function parseCharacters(value: string): string[] {
     .split(/[、,\n]/)
     .map(item => item.trim())
     .filter(Boolean);
+}
+
+async function generateStoryboardFromCanvasNode(
+  node: CanvasNode,
+  projectId: string,
+  scenes: Scene[],
+  shots: Shot[],
+  createScene: (scene: Omit<Scene, 'id'>) => Promise<Scene>,
+  createShot: (shot: Omit<Shot, 'id'>) => Promise<Shot>,
+): Promise<number> {
+  if (node.nodeType === 'script') {
+    const plan = createStoryboardGenerationPlan(projectId);
+    const scene = await createScene(plan.scene);
+    for (const shot of plan.shots) {
+      await createShot({ sceneId: scene.id, ...shot });
+    }
+    return plan.shots.length;
+  }
+
+  if (node.nodeType === 'scene' && node.refId) {
+    const scene = scenes.find(item => item.id === node.refId);
+    if (!scene) {
+      throw new Error('Scene node is not linked to an existing scene');
+    }
+    const sceneShots = shots.filter(shot => shot.sceneId === scene.id);
+    const nextShotNumber = Math.max(0, ...sceneShots.map(shot => shot.shotNumber)) + 1;
+    const shotPlan = createStoryboardShotPlan(projectId, nextShotNumber);
+    for (const shot of shotPlan) {
+      await createShot({ sceneId: scene.id, ...shot });
+    }
+    return shotPlan.length;
+  }
+
+  throw new Error('Unsupported storyboard generation node');
 }
 
 async function copyNodeDetailsToClipboard(details: CanvasNodeDialogDetails): Promise<void> {
