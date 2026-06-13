@@ -36,6 +36,12 @@ import {
   calculateMiniMapLayout,
   MiniMapLayout,
 } from '../lib/canvasViewport';
+import {
+  applyNodeSelectionDelta,
+  CanvasPoint,
+  getCanvasNodesInSelection,
+  normalizeSelectionRect,
+} from '../lib/canvasSelection';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -77,6 +83,11 @@ export default function CanvasView({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [selectionStart, setSelectionStart] = useState<CanvasPoint | null>(null);
+  const [selectionCurrent, setSelectionCurrent] = useState<CanvasPoint | null>(null);
+  const [dragStartPoint, setDragStartPoint] = useState<CanvasPoint | null>(null);
+  const [dragStartNodes, setDragStartNodes] = useState<CanvasNode[]>([]);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,6 +133,7 @@ export default function CanvasView({
     if (!rect) return;
 
     onSelectedNodeIdChange(node.id);
+    setSelectedNodeIds([node.id]);
     setCanvas(calculateFocusedView(node, { width: rect.width, height: rect.height }, canvas.scale));
     setSearchQuery('');
   };
@@ -197,36 +209,66 @@ export default function CanvasView({
       if (node) {
         setDraggedNode(nodeId);
         onSelectedNodeIdChange(nodeId);
+        const nextSelectedNodeIds = selectedNodeIds.includes(nodeId)
+          ? selectedNodeIds
+          : [nodeId];
+        setSelectedNodeIds(nextSelectedNodeIds);
         const rect = canvasRef.current?.getBoundingClientRect();
         if (rect) {
           const canvasX = (e.clientX - rect.left - canvas.offsetX) / canvas.scale;
           const canvasY = (e.clientY - rect.top - canvas.offsetY) / canvas.scale;
+          const dragPoint = { x: canvasX, y: canvasY };
           setDragOffset({
             x: canvasX - node.position.x,
             y: canvasY - node.position.y,
           });
+          setDragStartPoint(dragPoint);
+          setDragStartNodes(nodes.filter(canvasNode => nextSelectedNodeIds.includes(canvasNode.id)));
         }
       }
     } else {
+      if (e.shiftKey) {
+        const selectionPoint = getCanvasPoint(e);
+        setSelectionStart(selectionPoint);
+        setSelectionCurrent(selectionPoint);
+        setIsPanning(false);
+        onSelectedNodeIdChange(null);
+        setSelectedNodeIds([]);
+        return;
+      }
+
       // Start panning canvas
       setIsPanning(true);
       setPanStart({ x: e.clientX - canvas.offsetX, y: e.clientY - canvas.offsetY });
       onSelectedNodeIdChange(null);
+      setSelectedNodeIds([]);
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (connectingFromNodeId) {
       setConnectionPointer(getCanvasPoint(e));
+    } else if (selectionStart) {
+      setSelectionCurrent(getCanvasPoint(e));
     } else if (draggedNode) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
         const canvasX = (e.clientX - rect.left - canvas.offsetX) / canvas.scale;
         const canvasY = (e.clientY - rect.top - canvas.offsetY) / canvas.scale;
-        moveCanvasNodeLocally(draggedNode, {
-          x: canvasX - dragOffset.x,
-          y: canvasY - dragOffset.y,
-        });
+        if (dragStartPoint && dragStartNodes.length > 1) {
+          const movedPositions = applyNodeSelectionDelta(dragStartNodes, selectedNodeIds, {
+            x: canvasX - dragStartPoint.x,
+            y: canvasY - dragStartPoint.y,
+          });
+          Object.entries(movedPositions).forEach(([nodeId, position]) => {
+            moveCanvasNodeLocally(nodeId, position);
+          });
+        } else {
+          moveCanvasNodeLocally(draggedNode, {
+            x: canvasX - dragOffset.x,
+            y: canvasY - dragOffset.y,
+          });
+        }
       }
     } else if (isPanning) {
       // Pan canvas
@@ -245,14 +287,31 @@ export default function CanvasView({
       return;
     }
 
+    if (selectionStart && selectionCurrent) {
+      const selectionRect = normalizeSelectionRect(selectionStart, selectionCurrent);
+      const selectedIds = getCanvasNodesInSelection(nodes, selectionRect);
+      setSelectedNodeIds(selectedIds);
+      onSelectedNodeIdChange(selectedIds[0] ?? null);
+      setSelectionStart(null);
+      setSelectionCurrent(null);
+      return;
+    }
+
     if (draggedNode) {
-      const node = nodes.find(canvasNode => canvasNode.id === draggedNode);
-      if (node) {
-        void updateCanvasNode(draggedNode, { position: node.position });
-      }
+      const nodeIdsToPersist = dragStartNodes.length > 1
+        ? selectedNodeIds
+        : [draggedNode];
+      void Promise.all(
+        nodeIdsToPersist.map((nodeId) => {
+          const node = nodes.find(canvasNode => canvasNode.id === nodeId);
+          return node ? updateCanvasNode(nodeId, { position: node.position }) : Promise.resolve();
+        }),
+      );
     }
     setIsPanning(false);
     setDraggedNode(null);
+    setDragStartPoint(null);
+    setDragStartNodes([]);
   };
 
   const handleConnectionStart = (e: React.MouseEvent, nodeId: string) => {
@@ -261,6 +320,7 @@ export default function CanvasView({
     const node = nodes.find(canvasNode => canvasNode.id === nodeId);
     if (!node) return;
     onSelectedNodeIdChange(nodeId);
+    setSelectedNodeIds([nodeId]);
     setConnectingFromNodeId(nodeId);
     setConnectionPointer({
       x: node.position.x + node.size.width,
@@ -318,6 +378,9 @@ export default function CanvasView({
       connectionPointer.y,
     )
     : null;
+  const activeSelectionRect = selectionStart && selectionCurrent
+    ? normalizeSelectionRect(selectionStart, selectionCurrent)
+    : null;
 
   return (
     <div className="h-full flex flex-col bg-muted/20">
@@ -326,6 +389,7 @@ export default function CanvasView({
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
             {nodes.length} 个画布节点
+            {selectedNodeIds.length > 1 ? ` · 已选 ${selectedNodeIds.length} 个` : ''}
           </span>
           <div className="relative w-80">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -481,12 +545,15 @@ export default function CanvasView({
                 onMouseUp={(e) => {
                   void handleConnectionEnd(e, node.id);
                 }}
-                onContextMenu={() => onSelectedNodeIdChange(node.id)}
+                onContextMenu={() => {
+                  onSelectedNodeIdChange(node.id);
+                  setSelectedNodeIds([node.id]);
+                }}
                 className="cursor-move"
               >
                 <CanvasNodeCard
                   node={node}
-                  isSelected={selectedNodeId === node.id}
+                  isSelected={selectedNodeId === node.id || selectedNodeIds.includes(node.id)}
                   scene={node.refId ? scenes.find(item => item.id === node.refId) : undefined}
                   shot={node.refId ? shots.find(item => item.id === node.refId) : undefined}
                   onConnectionStart={handleConnectionStart}
@@ -495,6 +562,17 @@ export default function CanvasView({
               </div>
             );
           })}
+          {activeSelectionRect && (
+            <div
+              className="pointer-events-none absolute rounded border border-primary bg-primary/10"
+              style={{
+                left: activeSelectionRect.x,
+                top: activeSelectionRect.y,
+                width: activeSelectionRect.width,
+                height: activeSelectionRect.height,
+              }}
+            />
+          )}
         </div>
       </div>
 
