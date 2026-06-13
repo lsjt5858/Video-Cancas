@@ -29,6 +29,7 @@ from app.schemas.storyboard import (
 
 router = APIRouter()
 CHARACTER_NODE_NAMESPACE = UUID("4d8fd6d6-0e5c-49be-a00c-23674a2f4e43")
+LOCATION_NODE_NAMESPACE = UUID("384d5ce6-3eb2-4c39-8d0e-86b0e81de7da")
 
 
 @router.get("", response_model=list[ProjectRead])
@@ -409,6 +410,7 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
     )
     scene_nodes: dict[UUID, CanvasNode] = {}
     characters_by_name: dict[str, set[UUID]] = {}
+    locations_by_name: dict[str, set[UUID]] = {}
     for index, scene in enumerate(scenes):
         scene_node = nodes_by_ref.get(("scene", scene.id))
         if scene_node is None:
@@ -433,6 +435,9 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
             character_name = character.strip()
             if character_name:
                 characters_by_name.setdefault(character_name, set()).add(scene.id)
+        location_name = scene.location.strip() if scene.location else ""
+        if location_name:
+            locations_by_name.setdefault(location_name, set()).add(scene.id)
         if script_node:
             has_changes = ensure_canvas_edge(
                 db,
@@ -482,6 +487,50 @@ def sync_project_canvas(project_id: UUID, db: Session) -> None:
                     db,
                     project_id,
                     character_node.id,
+                    scene_node.id,
+                    "uses_asset",
+                ) or has_changes
+
+    for index, (location_name, scene_ids) in enumerate(sorted(locations_by_name.items())):
+        location_ref_id = uuid5(LOCATION_NODE_NAMESPACE, f"{project_id}:location:{location_name}")
+        location_node = nodes_by_ref.get(("location", location_ref_id))
+        sorted_scene_ids = sorted(str(scene_id) for scene_id in scene_ids)
+        location_data = {
+            "location_name": location_name,
+            "scene_ids": sorted_scene_ids,
+        }
+        if location_node is None:
+            location_node = CanvasNode(
+                project_id=project_id,
+                node_type="location",
+                title=f"地点：{location_name}",
+                position_x=80,
+                position_y=520 + index * 180,
+                width=220,
+                height=140,
+                ref_type="location",
+                ref_id=location_ref_id,
+                data=location_data,
+            )
+            db.add(location_node)
+            db.flush()
+            nodes_by_ref[("location", location_ref_id)] = location_node
+            has_changes = True
+        else:
+            if location_node.title != f"地点：{location_name}":
+                location_node.title = f"地点：{location_name}"
+                has_changes = True
+            if location_node.data != location_data:
+                location_node.data = location_data
+                has_changes = True
+
+        for scene_id in scene_ids:
+            scene_node = scene_nodes.get(scene_id)
+            if scene_node:
+                has_changes = ensure_canvas_edge(
+                    db,
+                    project_id,
+                    location_node.id,
                     scene_node.id,
                     "uses_asset",
                 ) or has_changes

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getCanvasNodePresentation } from './canvasNodePresentation';
 
 describe('canvas node presentation', () => {
-  it('returns distinct labels and accents for script, scene, shot, character, and prompt nodes', () => {
+  it('returns distinct labels and accents for script, scene, shot, character, location, and prompt nodes', () => {
     expect(getCanvasNodePresentation('script')).toMatchObject({
       label: '剧本',
       accentClassName: 'border-l-violet-500',
@@ -18,6 +18,10 @@ describe('canvas node presentation', () => {
     expect(getCanvasNodePresentation('character')).toMatchObject({
       label: '角色',
       accentClassName: 'border-l-pink-500',
+    });
+    expect(getCanvasNodePresentation('location')).toMatchObject({
+      label: '地点',
+      accentClassName: 'border-l-amber-500',
     });
     expect(getCanvasNodePresentation('prompt')).toMatchObject({
       label: '提示词',

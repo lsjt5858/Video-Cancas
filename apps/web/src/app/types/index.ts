@@ -38,7 +38,7 @@ export interface Shot {
 export interface CanvasNode {
   id: string;
   projectId: string;
-  nodeType: 'script' | 'scene' | 'shot' | 'character' | 'prompt' | 'image_result' | 'video_result' | 'export';
+  nodeType: 'script' | 'scene' | 'shot' | 'character' | 'location' | 'prompt' | 'image_result' | 'video_result' | 'export';
   title?: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
