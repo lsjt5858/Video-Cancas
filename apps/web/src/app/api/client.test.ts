@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createCanvasNode,
   createCanvasEdge,
   mapCanvasEdgeFromApi,
   mapCanvasNodeFromApi,
@@ -131,6 +132,56 @@ describe('API response mappers', () => {
 });
 
 describe('canvas edge API', () => {
+  it('creates a canvas node and maps the response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        id: 'node-1',
+        project_id: 'project-1',
+        node_type: 'prompt',
+        title: '新提示词',
+        position: { x: 320, y: 180 },
+        size: { width: 240, height: 160 },
+        ref_type: null,
+        ref_id: null,
+        data: { source: 'blank_menu' },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createCanvasNode('project-1', {
+        nodeType: 'prompt',
+        title: '新提示词',
+        position: { x: 320, y: 180 },
+        size: { width: 240, height: 160 },
+        data: { source: 'blank_menu' },
+      }),
+    ).resolves.toMatchObject({
+      id: 'node-1',
+      nodeType: 'prompt',
+      title: '新提示词',
+      position: { x: 320, y: 180 },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project-1/canvas/nodes',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          node_type: 'prompt',
+          title: '新提示词',
+          position: { x: 320, y: 180 },
+          size: { width: 240, height: 160 },
+          ref_type: undefined,
+          ref_id: undefined,
+          data: { source: 'blank_menu' },
+        }),
+      }),
+    );
+  });
+
   it('creates a canvas edge and maps the response', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

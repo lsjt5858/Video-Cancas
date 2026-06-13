@@ -49,6 +49,10 @@ import {
   normalizeSelectionRect,
 } from '../lib/canvasSelection';
 import { getVisibleCanvasGraph } from '../lib/canvasVisibility';
+import {
+  BlankCanvasNodeType,
+  createBlankCanvasNodeInput,
+} from '../lib/canvasBlankMenu';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -64,6 +68,12 @@ interface CanvasState {
   offsetY: number;
 }
 
+type BlankCanvasMenuState = {
+  screenX: number;
+  screenY: number;
+  canvasPoint: CanvasPoint;
+};
+
 const MINI_MAP_SIZE = { width: 180, height: 120 };
 
 export default function CanvasView({
@@ -77,6 +87,7 @@ export default function CanvasView({
     getCanvasEdgesByProject,
     getScenesByProject,
     getShotsByProject,
+    createCanvasNode,
     createCanvasEdge,
     moveCanvasNodeLocally,
     updateCanvasNode,
@@ -98,6 +109,7 @@ export default function CanvasView({
   const [collapsedSceneIds, setCollapsedSceneIds] = useState<string[]>([]);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
+  const [blankMenu, setBlankMenu] = useState<BlankCanvasMenuState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -180,6 +192,17 @@ export default function CanvasView({
     setSelectedNodeIds([nodeId]);
   };
 
+  const handleCreateBlankNode = async (nodeType: BlankCanvasNodeType) => {
+    if (!blankMenu) return;
+    const node = await createCanvasNode(
+      projectId,
+      createBlankCanvasNodeInput(nodeType, blankMenu.canvasPoint),
+    );
+    setBlankMenu(null);
+    onSelectedNodeIdChange(node.id);
+    setSelectedNodeIds([node.id]);
+  };
+
   const handleMiniMapClick = (
     event: React.MouseEvent<SVGSVGElement>,
     layout: MiniMapLayout,
@@ -241,6 +264,8 @@ export default function CanvasView({
     if (e.button !== 0) {
       return;
     }
+
+    setBlankMenu(null);
 
     if (connectingFromNodeId) {
       return;
@@ -397,6 +422,17 @@ export default function CanvasView({
     }));
   };
 
+  const handleCanvasContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setBlankMenu({
+      screenX: e.clientX,
+      screenY: e.clientY,
+      canvasPoint: getCanvasPoint(e),
+    });
+    onSelectedNodeIdChange(null);
+    setSelectedNodeIds([]);
+  };
+
   const getCanvasPoint = (e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) {
@@ -547,6 +583,7 @@ export default function CanvasView({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onContextMenu={handleCanvasContextMenu}
         onWheel={handleWheel}
       >
         <div
@@ -635,7 +672,8 @@ export default function CanvasView({
                 onMouseUp={(e) => {
                   void handleConnectionEnd(e, node.id);
                 }}
-                onContextMenu={() => {
+                onContextMenu={(event) => {
+                  event.stopPropagation();
                   onSelectedNodeIdChange(node.id);
                   setSelectedNodeIds([node.id]);
                 }}
@@ -667,6 +705,43 @@ export default function CanvasView({
             />
           )}
         </div>
+        {blankMenu && (
+          <div
+            className="fixed z-50 w-44 rounded-md border bg-background p-1 shadow-lg"
+            style={{ left: blankMenu.screenX, top: blankMenu.screenY }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <button
+              type="button"
+              className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onClick={() => void handleCreateBlankNode('prompt')}
+            >
+              新增提示词节点
+            </button>
+            <button
+              type="button"
+              className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onClick={() => void handleCreateBlankNode('image_result')}
+            >
+              新增图片结果节点
+            </button>
+            <button
+              type="button"
+              className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onClick={() => void handleCreateBlankNode('video_result')}
+            >
+              新增视频结果节点
+            </button>
+            <button
+              type="button"
+              className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onClick={() => void handleCreateBlankNode('export')}
+            >
+              新增导出节点
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Selected node info */}

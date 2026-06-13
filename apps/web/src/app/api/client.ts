@@ -1,4 +1,5 @@
 import { CanvasEdge, CanvasNode, Project, Scene, Shot } from '../types';
+import { CanvasNodeCreateInput } from '../lib/canvasBlankMenu';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
@@ -74,6 +75,16 @@ type ApiCanvasEdgeCreate = {
   source_node_id: string;
   target_node_id: string;
   relation_type: string;
+  data: Record<string, unknown>;
+};
+
+type ApiCanvasNodeCreate = {
+  node_type: CanvasNode['nodeType'];
+  title?: string;
+  position: CanvasNode['position'];
+  size: CanvasNode['size'];
+  ref_type?: string;
+  ref_id?: string;
   data: Record<string, unknown>;
 };
 
@@ -288,6 +299,17 @@ export async function listCanvasNodes(projectId: string): Promise<CanvasNode[]> 
   return nodes.map(mapCanvasNodeFromApi);
 }
 
+export async function createCanvasNode(
+  projectId: string,
+  input: CanvasNodeCreateInput,
+): Promise<CanvasNode> {
+  const node = await apiFetch<ApiCanvasNode>(`/projects/${projectId}/canvas/nodes`, {
+    method: 'POST',
+    body: JSON.stringify(mapCanvasNodeCreateToApi(input)),
+  });
+  return mapCanvasNodeFromApi(node);
+}
+
 export async function updateCanvasNode(
   projectId: string,
   nodeId: string,
@@ -387,6 +409,18 @@ function mapCanvasNodeUpdateToApi(
   if (updates.size !== undefined) payload.size = updates.size;
   if (updates.data !== undefined) payload.data = updates.data;
   return payload;
+}
+
+function mapCanvasNodeCreateToApi(input: CanvasNodeCreateInput): ApiCanvasNodeCreate {
+  return {
+    node_type: input.nodeType,
+    title: input.title,
+    position: input.position,
+    size: input.size,
+    ref_type: input.refType,
+    ref_id: input.refId,
+    data: input.data,
+  };
 }
 
 function mapCanvasEdgeCreateToApi(

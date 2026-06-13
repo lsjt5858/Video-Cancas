@@ -10,6 +10,7 @@ import {
   Timeline,
 } from '../types';
 import * as api from '../api/client';
+import { CanvasNodeCreateInput } from '../lib/canvasBlankMenu';
 
 interface AppContextType {
   projects: Project[];
@@ -45,6 +46,7 @@ interface AppContextType {
   // Canvas methods
   getCanvasNodesByProject: (projectId: string) => CanvasNode[];
   getCanvasEdgesByProject: (projectId: string) => CanvasEdge[];
+  createCanvasNode: (projectId: string, input: CanvasNodeCreateInput) => Promise<CanvasNode>;
   createCanvasEdge: (
     projectId: string,
     input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
@@ -218,6 +220,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getCanvasEdgesByProject = (projectId: string) =>
     canvasEdges.filter(edge => edge.projectId === projectId);
 
+  const createCanvasNode = async (projectId: string, input: CanvasNodeCreateInput) => {
+    const newNode = await api.createCanvasNode(projectId, input);
+    setCanvasNodes(prev => [...prev, newNode]);
+    return newNode;
+  };
+
   const createCanvasEdge = async (
     projectId: string,
     input: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'relationType' | 'data'>,
@@ -371,6 +379,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getShotsByScene,
       getCanvasNodesByProject,
       getCanvasEdgesByProject,
+    createCanvasNode,
       createCanvasEdge,
       updateCanvasNode,
       moveCanvasNodeLocally,
