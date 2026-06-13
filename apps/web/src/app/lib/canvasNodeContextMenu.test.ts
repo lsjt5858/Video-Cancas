@@ -26,12 +26,12 @@ describe('canvas node context menu', () => {
     );
   });
 
-  it('keeps generation and deletion actions visible but disabled until backend flows exist', () => {
+  it('keeps generation actions disabled and enables deletion', () => {
     expect(getCanvasNodeContextMenuItems(makeNode('shot'))).toEqual(
       expect.arrayContaining([
         { action: 'generate_image', label: '生成图片（待接入）', disabled: true },
         { action: 'generate_video', label: '生成视频（待接入）', disabled: true },
-        { action: 'delete_node', label: '删除节点（待接入）', disabled: true },
+        { action: 'delete_node', label: '删除节点', disabled: false },
       ]),
     );
   });

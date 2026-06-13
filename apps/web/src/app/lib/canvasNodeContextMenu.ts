@@ -26,7 +26,7 @@ export function getCanvasNodeContextMenuItems(node: CanvasNode): CanvasNodeConte
     );
   }
 
-  items.push({ action: 'delete_node', label: '删除节点（待接入）', disabled: true });
+  items.push({ action: 'delete_node', label: '删除节点', disabled: false });
 
   return items;
 }

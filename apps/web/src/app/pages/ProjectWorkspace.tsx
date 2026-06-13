@@ -50,6 +50,7 @@ export default function ProjectWorkspace() {
     getCanvasNodesByProject,
     getScenesByProject,
     getShotsByProject,
+    deleteCanvasNode,
     updateScene,
     updateShot,
   } = useApp();
@@ -123,6 +124,13 @@ export default function ProjectWorkspace() {
     if (action === 'copy_info') {
       await copyNodeDetailsToClipboard(dialogDetails);
       toast.success('节点信息已复制');
+      return;
+    }
+
+    if (action === 'delete_node') {
+      await deleteCanvasNode(node.id);
+      setSelectedCanvasNodeId(null);
+      toast.success('节点已删除');
       return;
     }
 
