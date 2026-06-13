@@ -53,6 +53,10 @@ import {
   BlankCanvasNodeType,
   createBlankCanvasNodeInput,
 } from '../lib/canvasBlankMenu';
+import {
+  buildCanvasNodeGroups,
+  CanvasNodeGroup,
+} from '../lib/canvasNodeGroups';
 import { CanvasNode, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -108,6 +112,7 @@ export default function CanvasView({
   const [dragStartPoint, setDragStartPoint] = useState<CanvasPoint | null>(null);
   const [dragStartNodes, setDragStartNodes] = useState<CanvasNode[]>([]);
   const [collapsedSceneIds, setCollapsedSceneIds] = useState<string[]>([]);
+  const [showNodeGroups, setShowNodeGroups] = useState(true);
   const [connectingFromNodeId, setConnectingFromNodeId] = useState<string | null>(null);
   const [connectionPointer, setConnectionPointer] = useState<{ x: number; y: number } | null>(null);
   const [blankMenu, setBlankMenu] = useState<BlankCanvasMenuState | null>(null);
@@ -133,6 +138,10 @@ export default function CanvasView({
   const miniMapLayout = useMemo(
     () => calculateMiniMapLayout(visibleNodes, MINI_MAP_SIZE),
     [visibleNodes],
+  );
+  const nodeGroups = useMemo(
+    () => buildCanvasNodeGroups({ nodes: visibleNodes, scenes, shots }),
+    [visibleNodes, scenes, shots],
   );
 
   const handleZoomIn = () => {
@@ -567,6 +576,14 @@ export default function CanvasView({
               </Button>
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowNodeGroups(prev => !prev)}
+            title="显示或隐藏场景/角色分组"
+          >
+            {showNodeGroups ? '隐藏分组' : '显示分组'}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleZoomOut}>
             <ZoomOut className="size-4" />
           </Button>
@@ -667,6 +684,10 @@ export default function CanvasView({
               />
             )}
           </svg>
+
+          {showNodeGroups && nodeGroups.map(group => (
+            <CanvasNodeGroupFrame key={group.id} group={group} />
+          ))}
 
           {/* Canvas nodes */}
           {visibleNodes.map((node) => {
@@ -780,6 +801,34 @@ export default function CanvasView({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CanvasNodeGroupFrame({ group }: { group: CanvasNodeGroup }) {
+  const isCharacterGroup = group.kind === 'character';
+
+  return (
+    <div
+      className={[
+        'pointer-events-none absolute rounded-2xl border border-dashed bg-background/25',
+        isCharacterGroup ? 'border-purple-400/70' : 'border-blue-400/70',
+      ].join(' ')}
+      style={{
+        left: group.bounds.x,
+        top: group.bounds.y,
+        width: group.bounds.width,
+        height: group.bounds.height,
+      }}
+    >
+      <div
+        className={[
+          'absolute -top-6 left-3 rounded-full border bg-background/95 px-2 py-0.5 text-xs font-medium shadow-sm',
+          isCharacterGroup ? 'border-purple-300 text-purple-700' : 'border-blue-300 text-blue-700',
+        ].join(' ')}
+      >
+        {group.label}
+      </div>
     </div>
   );
 }
