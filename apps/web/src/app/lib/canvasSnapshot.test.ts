@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CanvasEdge, CanvasNode } from '../types';
 import {
   createCanvasSnapshot,
+  getCanvasSnapshotsByProject,
   loadCanvasSnapshots,
   prependCanvasSnapshot,
   saveCanvasSnapshot,
@@ -83,6 +84,39 @@ describe('canvas snapshot', () => {
 
     expect(saveCanvasSnapshot(storage, snapshot)).toEqual([snapshot]);
     expect(loadCanvasSnapshots(storage)).toEqual([snapshot]);
+  });
+
+  it('returns snapshots for one project in newest-first order', () => {
+    const projectSnapshot = createCanvasSnapshot({
+      projectId: 'project-1',
+      title: 'older',
+      nodes,
+      edges,
+      createdAt: 10,
+    });
+    const otherProjectSnapshot = createCanvasSnapshot({
+      projectId: 'project-2',
+      title: 'other',
+      nodes: [],
+      edges: [],
+      createdAt: 20,
+    });
+    const newestProjectSnapshot = createCanvasSnapshot({
+      projectId: 'project-1',
+      title: 'newer',
+      nodes,
+      edges: [],
+      createdAt: 30,
+    });
+
+    expect(getCanvasSnapshotsByProject([
+      projectSnapshot,
+      otherProjectSnapshot,
+      newestProjectSnapshot,
+    ], 'project-1')).toEqual([
+      newestProjectSnapshot,
+      projectSnapshot,
+    ]);
   });
 });
 

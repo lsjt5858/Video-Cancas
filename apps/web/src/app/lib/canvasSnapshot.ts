@@ -45,6 +45,15 @@ export function prependCanvasSnapshot(
   return [snapshot, ...snapshots.filter(item => item.id !== snapshot.id)].slice(0, limit);
 }
 
+export function getCanvasSnapshotsByProject(
+  snapshots: CanvasSnapshot[],
+  projectId: string,
+): CanvasSnapshot[] {
+  return snapshots
+    .filter(snapshot => snapshot.projectId === projectId)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
 export function loadCanvasSnapshots(storage: Storage): CanvasSnapshot[] {
   const raw = storage.getItem(CANVAS_SNAPSHOT_STORAGE_KEY);
   if (!raw) return [];

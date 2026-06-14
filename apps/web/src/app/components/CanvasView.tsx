@@ -13,6 +13,14 @@ import {
   ContextMenuTrigger,
 } from './ui/context-menu';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import {
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -82,7 +90,9 @@ import {
 import { createCanvasBatchStyleApplicationPlan } from '../lib/canvasBatchStyle';
 import { ImageGenerationParams } from '../lib/imageGenerationParams';
 import {
+  CanvasSnapshot,
   createCanvasSnapshot,
+  getCanvasSnapshotsByProject,
   loadCanvasSnapshots,
   saveCanvasSnapshot,
 } from '../lib/canvasSnapshot';
@@ -171,7 +181,7 @@ export default function CanvasView({
   const [blankMenu, setBlankMenu] = useState<BlankCanvasMenuState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const [snapshotCount, setSnapshotCount] = useState(0);
+  const [snapshotHistory, setSnapshotHistory] = useState<CanvasSnapshot[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { visibleNodes, visibleEdges } = useMemo(
     () => getVisibleCanvasGraph(nodes, edges, shots, collapsedSceneIds),
@@ -217,11 +227,10 @@ export default function CanvasView({
   );
 
   useEffect(() => {
-    setSnapshotCount(
-      loadCanvasSnapshots(window.localStorage)
-        .filter(snapshot => snapshot.projectId === projectId)
-        .length,
-    );
+    setSnapshotHistory(getCanvasSnapshotsByProject(
+      loadCanvasSnapshots(window.localStorage),
+      projectId,
+    ));
   }, [projectId]);
 
   const handleZoomIn = () => {
@@ -434,7 +443,7 @@ export default function CanvasView({
       edges,
     });
     const snapshots = saveCanvasSnapshot(window.localStorage, snapshot);
-    setSnapshotCount(snapshots.filter(item => item.projectId === projectId).length);
+    setSnapshotHistory(getCanvasSnapshotsByProject(snapshots, projectId));
     toast.success(`已保存画布快照：${snapshot.nodeCount} 个节点，${snapshot.edgeCount} 条连线`);
   };
 
@@ -797,14 +806,39 @@ export default function CanvasView({
               </Button>
             </>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSaveSnapshot}
-            title="保存当前画布节点和连线快照到本地历史"
-          >
-            保存快照{snapshotCount > 0 ? ` (${snapshotCount})` : ''}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                title="查看当前项目本地快照历史"
+              >
+                快照{snapshotHistory.length > 0 ? ` (${snapshotHistory.length})` : ''}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>本地快照历史</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSaveSnapshot}>
+                保存当前画布快照
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {snapshotHistory.length === 0 ? (
+                <DropdownMenuItem disabled>
+                  暂无快照
+                </DropdownMenuItem>
+              ) : (
+                snapshotHistory.slice(0, 6).map(snapshot => (
+                  <DropdownMenuItem key={snapshot.id} className="flex-col items-start gap-1">
+                    <span className="font-medium">{snapshot.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatSnapshotTime(snapshot.createdAt)} · {snapshot.nodeCount} 节点 · {snapshot.edgeCount} 连线
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {selectedNodeIds.length > 1 && (
             <>
               <Button
@@ -1864,6 +1898,10 @@ function downloadTextFile(filename: string, content: string, mimeType: string) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function formatSnapshotTime(createdAt: number): string {
+  return new Date(createdAt).toLocaleString();
 }
 
 function buildEdgePath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
