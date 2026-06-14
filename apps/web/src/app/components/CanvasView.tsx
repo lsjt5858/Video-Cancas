@@ -38,6 +38,10 @@ import {
   getCanvasGenerationProgressItems,
 } from '../lib/canvasGenerationProgress';
 import {
+  CanvasGenerationResultPreview,
+  getCanvasGenerationResultPreviews,
+} from '../lib/canvasGenerationResults';
+import {
   calculateCenteredView,
   calculateFitView,
   calculateFocusedView,
@@ -961,6 +965,7 @@ function CanvasNodeCard({
   const menuItems = getCanvasNodeContextMenuItems(node);
   const generationActions = getCanvasNodeGenerationActions(node, shot);
   const progressItems = getCanvasGenerationProgressItems(tasks, shot?.id);
+  const resultPreviews = getCanvasGenerationResultPreviews(shot, tasks);
 
   return (
     <ContextMenu>
@@ -1012,14 +1017,11 @@ function CanvasNodeCard({
           </div>
           <div className="text-sm font-medium line-clamp-2 mb-1">{title}</div>
           <div className="text-xs text-muted-foreground line-clamp-3">{description}</div>
-          {shot?.imageUrl && (
-            <div className="mt-2 rounded overflow-hidden">
-              <img
-                src={shot.imageUrl}
-                alt={shot.description}
-                className="w-full h-24 object-cover"
-              />
-            </div>
+          {resultPreviews.length > 0 && (
+            <CanvasGenerationResultPreviewList
+              previews={resultPreviews}
+              description={shot?.description ?? title}
+            />
           )}
           {progressItems.length > 0 && (
             <CanvasGenerationProgressList items={progressItems} />
@@ -1075,6 +1077,63 @@ function CanvasNodeCard({
         ))}
       </ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+function CanvasGenerationResultPreviewList({
+  previews,
+  description,
+}: {
+  previews: CanvasGenerationResultPreview[];
+  description: string;
+}) {
+  return (
+    <div className="mt-2 grid gap-2">
+      {previews.map(preview => (
+        <a
+          key={`${preview.type}-${preview.url}`}
+          href={preview.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group overflow-hidden rounded border bg-muted/20"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <div className="relative h-24 overflow-hidden bg-muted">
+            {preview.type === 'image' ? (
+              <img
+                src={preview.url}
+                alt={`${description} ${preview.label}`}
+                className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              />
+            ) : (
+              <>
+                <video
+                  src={preview.url}
+                  poster={preview.thumbnailUrl !== preview.url ? preview.thumbnailUrl : undefined}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                  <Video className="size-5" />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex items-center justify-between px-2 py-1 text-[11px]">
+            <span className="font-medium">{preview.label}</span>
+            <span className="text-muted-foreground">点击预览</span>
+          </div>
+        </a>
+      ))}
+    </div>
   );
 }
 
