@@ -75,6 +75,10 @@ import {
 } from '../lib/canvasSelection';
 import { getVisibleCanvasGraph } from '../lib/canvasVisibility';
 import {
+  CanvasBatchGenerationType,
+  createCanvasBatchGenerationPlan,
+} from '../lib/canvasBatchGeneration';
+import {
   BlankCanvasNodeType,
   createBlankCanvasNodeInput,
 } from '../lib/canvasBlankMenu';
@@ -96,6 +100,7 @@ interface CanvasViewProps {
   selectedNodeId: string | null;
   onSelectedNodeIdChange: (nodeId: string | null) => void;
   onNodeContextMenuAction: (action: CanvasNodeContextMenuAction, node: CanvasNode) => void;
+  onGenerateSelectedShots: (type: CanvasBatchGenerationType, shotIds: string[]) => void;
 }
 
 interface CanvasState {
@@ -117,6 +122,7 @@ export default function CanvasView({
   selectedNodeId,
   onSelectedNodeIdChange,
   onNodeContextMenuAction,
+  onGenerateSelectedShots,
 }: CanvasViewProps) {
   const {
     getCanvasNodesByProject,
@@ -343,6 +349,24 @@ export default function CanvasView({
       format === 'json' ? 'application/json' : 'text/csv',
     );
     toast.success(`已导出 ${exportData.rows.length} 个节点`);
+  };
+
+  const handleGenerateSelectedShots = (type: CanvasBatchGenerationType) => {
+    const plan = createCanvasBatchGenerationPlan({
+      type,
+      selectedNodeIds,
+      nodes: visibleNodes,
+      shots,
+    });
+    if (plan.items.length === 0) {
+      toast.error(type === 'image' ? '未选中可生图的镜头节点' : '未选中可生视频的镜头节点');
+      return;
+    }
+
+    onGenerateSelectedShots(type, plan.items.map(item => item.shotId));
+    if (plan.skipped.length > 0) {
+      toast.info(`已跳过 ${plan.skipped.length} 个不满足条件的节点`);
+    }
   };
 
   const handleMiniMapClick = (
@@ -677,6 +701,22 @@ export default function CanvasView({
                 title="导出选中节点为 CSV"
               >
                 导出 CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleGenerateSelectedShots('image')}
+                title="为选中镜头批量提交生图任务"
+              >
+                批量生图
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleGenerateSelectedShots('video')}
+                title="为选中镜头批量提交生视频任务"
+              >
+                批量生视频
               </Button>
             </>
           )}

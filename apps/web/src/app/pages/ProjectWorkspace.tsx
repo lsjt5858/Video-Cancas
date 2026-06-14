@@ -62,6 +62,7 @@ import {
   VideoGenerationParams,
   createDefaultVideoGenerationParams,
 } from '../lib/videoGenerationParams';
+import { CanvasBatchGenerationType } from '../lib/canvasBatchGeneration';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
 import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
@@ -79,9 +80,11 @@ export default function ProjectWorkspace() {
     createScene,
     createShot,
     createAsset,
+    createTask,
     deleteCanvasNode,
     updateScene,
     updateShot,
+    updateTask,
   } = useApp();
   const [activeTab, setActiveTab] = useState('script');
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
@@ -136,6 +139,83 @@ export default function ProjectWorkspace() {
   const handleSaveShot = async (shotId: string, updates: Partial<Shot>) => {
     await updateShot(shotId, updates);
     toast.success('镜头已保存');
+  };
+
+  const handleGenerateSelectedShots = (
+    type: CanvasBatchGenerationType,
+    shotIds: string[],
+  ) => {
+    const selectedShots = shotIds
+      .map(shotId => shots.find(shot => shot.id === shotId))
+      .filter((shot): shot is Shot => Boolean(shot));
+
+    if (selectedShots.length === 0) {
+      toast.error('没有可提交生成的镜头');
+      return;
+    }
+
+    selectedShots.forEach((shot, index) => {
+      submitMockGenerationTask(type, shot, index);
+    });
+    toast.success(`已提交 ${selectedShots.length} 个${type === 'image' ? '生图' : '生视频'}任务`);
+  };
+
+  const submitMockGenerationTask = (
+    type: CanvasBatchGenerationType,
+    shot: Shot,
+    index: number,
+  ) => {
+    if (type === 'video' && !shot.imageUrl) {
+      toast.error(`镜头 ${shot.shotNumber} 缺少首帧图，无法生视频`);
+      return;
+    }
+
+    const task = createTask({
+      projectId: project.id,
+      shotId: shot.id,
+      type,
+      status: 'processing',
+      prompt: shot.prompt,
+    });
+
+    window.setTimeout(() => {
+      const resultUrl = type === 'image'
+        ? 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=800&h=600&fit=crop&q=80'
+        : 'https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4';
+      const asset = createAsset({
+        projectId: project.id,
+        shotId: shot.id,
+        type,
+        url: resultUrl,
+        thumbnailUrl: type === 'image' ? resultUrl : shot.imageUrl,
+        metadata: {
+          width: type === 'image' ? 800 : 1280,
+          height: type === 'image' ? 600 : 720,
+          duration: type === 'video' ? shot.duration : undefined,
+          prompt: shot.prompt,
+          generatedAt: Date.now(),
+        },
+      });
+
+      void updateShot(
+        shot.id,
+        type === 'image' ? { imageUrl: asset.url } : { videoUrl: asset.url },
+      )
+        .then(() => {
+          updateTask(task.id, {
+            status: 'completed',
+            resultUrl: asset.url,
+            completedAt: Date.now(),
+          });
+        })
+        .catch(() => {
+          updateTask(task.id, {
+            status: 'failed',
+            error: type === 'image' ? '图片回写失败' : '视频回写失败',
+            completedAt: Date.now(),
+          });
+        });
+    }, 600 + index * 150);
   };
 
   const handleNodeContextMenuAction = async (
@@ -251,6 +331,7 @@ export default function ProjectWorkspace() {
                     projectId={project.id}
                     selectedNodeId={selectedCanvasNodeId}
                     onSelectedNodeIdChange={setSelectedCanvasNodeId}
+                    onGenerateSelectedShots={handleGenerateSelectedShots}
                     onNodeContextMenuAction={(action, node) => {
                       void handleNodeContextMenuAction(action, node);
                     }}
