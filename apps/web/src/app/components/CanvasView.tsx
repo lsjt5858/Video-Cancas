@@ -79,6 +79,8 @@ import {
   createCanvasBatchGenerationPlan,
   getCanvasBatchGenerationLabel,
 } from '../lib/canvasBatchGeneration';
+import { createCanvasBatchStyleApplicationPlan } from '../lib/canvasBatchStyle';
+import { ImageGenerationParams } from '../lib/imageGenerationParams';
 import {
   BlankCanvasNodeType,
   createBlankCanvasNodeInput,
@@ -102,6 +104,7 @@ interface CanvasViewProps {
   onSelectedNodeIdChange: (nodeId: string | null) => void;
   onNodeContextMenuAction: (action: CanvasNodeContextMenuAction, node: CanvasNode) => void;
   onGenerateSelectedShots: (type: CanvasBatchGenerationType, shotIds: string[]) => void;
+  imageGenerationParams: ImageGenerationParams;
 }
 
 interface CanvasState {
@@ -124,6 +127,7 @@ export default function CanvasView({
   onSelectedNodeIdChange,
   onNodeContextMenuAction,
   onGenerateSelectedShots,
+  imageGenerationParams,
 }: CanvasViewProps) {
   const {
     getCanvasNodesByProject,
@@ -385,6 +389,26 @@ export default function CanvasView({
     onGenerateSelectedShots(type, plan.items.map(item => item.shotId));
     if (plan.skipped.length > 0) {
       toast.info(`已跳过 ${plan.skipped.length} 个不满足条件的节点`);
+    }
+  };
+
+  const handleApplyBatchStyle = async () => {
+    const plan = createCanvasBatchStyleApplicationPlan({
+      selectedNodeIds,
+      nodes: visibleNodes,
+      params: imageGenerationParams,
+    });
+    if (plan.updates.length === 0) {
+      toast.error('请先选择镜头或提示词节点');
+      return;
+    }
+
+    await Promise.all(plan.updates.map(update => (
+      updateCanvasNode(update.nodeId, { data: update.data })
+    )));
+    toast.success(`已应用当前风格到 ${plan.updates.length} 个节点`);
+    if (plan.skipped.length > 0) {
+      toast.info(`已跳过 ${plan.skipped.length} 个不支持的节点`);
     }
   };
 
@@ -736,6 +760,14 @@ export default function CanvasView({
                 title="为选中镜头批量提交生视频任务"
               >
                 {getCanvasBatchGenerationLabel(videoBatchGenerationPlan)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleApplyBatchStyle()}
+                title="把右侧生图参数应用到选中镜头或提示词节点"
+              >
+                应用当前风格
               </Button>
             </>
           )}

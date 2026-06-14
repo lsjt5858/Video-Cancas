@@ -89,6 +89,12 @@ export default function ProjectWorkspace() {
   const [activeTab, setActiveTab] = useState('script');
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [imageParams, setImageParams] = useState<ImageGenerationParams>(
+    createDefaultImageGenerationParams,
+  );
+  const [videoParams, setVideoParams] = useState<VideoGenerationParams>(
+    createDefaultVideoGenerationParams,
+  );
   
   const project = projectId ? getProject(projectId) : undefined;
   const canvasNodes = project ? getCanvasNodesByProject(project.id) : [];
@@ -332,6 +338,7 @@ export default function ProjectWorkspace() {
                     selectedNodeId={selectedCanvasNodeId}
                     onSelectedNodeIdChange={setSelectedCanvasNodeId}
                     onGenerateSelectedShots={handleGenerateSelectedShots}
+                    imageGenerationParams={imageParams}
                     onNodeContextMenuAction={(action, node) => {
                       void handleNodeContextMenuAction(action, node);
                     }}
@@ -349,6 +356,10 @@ export default function ProjectWorkspace() {
                     onDetailDialogOpenChange={setIsDetailDialogOpen}
                     onSaveScene={handleSaveScene}
                     onSaveShot={handleSaveShot}
+                    imageParams={imageParams}
+                    onImageParamsChange={setImageParams}
+                    videoParams={videoParams}
+                    onVideoParamsChange={setVideoParams}
                   />
                 </ResizablePanel>
               </ResizablePanelGroup>
@@ -378,6 +389,10 @@ function CanvasNodeInspector({
   onDetailDialogOpenChange,
   onSaveScene,
   onSaveShot,
+  imageParams,
+  onImageParamsChange,
+  videoParams,
+  onVideoParamsChange,
 }: {
   node?: CanvasNode;
   details: ReturnType<typeof getCanvasNodeDetails> | null;
@@ -388,6 +403,10 @@ function CanvasNodeInspector({
   onDetailDialogOpenChange: (open: boolean) => void;
   onSaveScene: (sceneId: string, updates: Partial<Scene>) => Promise<void>;
   onSaveShot: (shotId: string, updates: Partial<Shot>) => Promise<void>;
+  imageParams: ImageGenerationParams;
+  onImageParamsChange: (params: ImageGenerationParams) => void;
+  videoParams: VideoGenerationParams;
+  onVideoParamsChange: (params: VideoGenerationParams) => void;
 }) {
   const [sceneForm, setSceneForm] = useState<SceneForm | null>(null);
   const [shotForm, setShotForm] = useState<ShotForm | null>(null);
@@ -399,13 +418,6 @@ function CanvasNodeInspector({
   const [selectedVideoModelId, setSelectedVideoModelId] = useState(
     getDefaultGenerationModel('video').id,
   );
-  const [imageParams, setImageParams] = useState<ImageGenerationParams>(
-    createDefaultImageGenerationParams,
-  );
-  const [videoParams, setVideoParams] = useState<VideoGenerationParams>(
-    createDefaultVideoGenerationParams,
-  );
-
   useEffect(() => {
     if (!scene) {
       setSceneForm(null);
@@ -522,11 +534,11 @@ function CanvasNodeInspector({
           />
           <ImageGenerationParamsPanel
             params={imageParams}
-            onParamsChange={setImageParams}
+            onParamsChange={onImageParamsChange}
           />
           <VideoGenerationParamsPanel
             params={videoParams}
-            onParamsChange={setVideoParams}
+            onParamsChange={onVideoParamsChange}
           />
           <Separator className="mb-4" />
         </>
