@@ -46,6 +46,10 @@ import {
   getCanvasImageCandidates,
 } from '../lib/canvasImageCandidates';
 import {
+  CanvasVideoCandidate,
+  getCanvasVideoCandidates,
+} from '../lib/canvasVideoCandidates';
+import {
   calculateCenteredView,
   calculateFitView,
   calculateFocusedView,
@@ -976,6 +980,7 @@ function CanvasNodeCard({
   const progressItems = getCanvasGenerationProgressItems(tasks, shot?.id);
   const resultPreviews = getCanvasGenerationResultPreviews(shot, tasks);
   const imageCandidates = getCanvasImageCandidates(shot, assets, 6);
+  const videoCandidates = getCanvasVideoCandidates(shot, assets, 4);
 
   return (
     <ContextMenu>
@@ -1036,6 +1041,12 @@ function CanvasNodeCard({
           {imageCandidates.length > 0 && (
             <CanvasImageCandidateList
               candidates={imageCandidates}
+              description={shot?.description ?? title}
+            />
+          )}
+          {videoCandidates.length > 0 && (
+            <CanvasVideoCandidateList
+              candidates={videoCandidates}
               description={shot?.description ?? title}
             />
           )}
@@ -1197,6 +1208,63 @@ function CanvasImageCandidateList({
             <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
               {candidate.isSelected ? '当前' : candidate.label}
             </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CanvasVideoCandidateList({
+  candidates,
+  description,
+}: {
+  candidates: CanvasVideoCandidate[];
+  description: string;
+}) {
+  return (
+    <div className="mt-2 rounded border bg-muted/10 p-2">
+      <div className="mb-1.5 flex items-center justify-between text-[11px]">
+        <span className="font-medium">视频候选</span>
+        <span className="text-muted-foreground">{candidates.length} 个</span>
+      </div>
+      <div className="grid gap-1.5">
+        {candidates.map(candidate => (
+          <a
+            key={candidate.assetId}
+            href={candidate.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={candidate.isSelected ? `${candidate.label} · 当前视频` : candidate.label}
+            className={[
+              'group relative block overflow-hidden rounded border bg-muted',
+              candidate.isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-border',
+            ].join(' ')}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="relative h-16 overflow-hidden">
+              <video
+                src={candidate.url}
+                poster={candidate.thumbnailUrl !== candidate.url ? candidate.thumbnailUrl : undefined}
+                muted
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                <Video className="size-4" />
+              </div>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
+              {candidate.isSelected ? '当前' : candidate.label}
+            </div>
+            <span className="sr-only">{description} {candidate.label}</span>
           </a>
         ))}
       </div>
