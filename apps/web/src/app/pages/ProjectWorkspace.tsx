@@ -40,6 +40,12 @@ import {
   createStoryboardGenerationPlan,
   createStoryboardShotPlan,
 } from '../lib/storyboardGeneration';
+import {
+  GenerationModel,
+  getDefaultGenerationModel,
+  getGenerationModelById,
+  getGenerationModelsByType,
+} from '../lib/generationModels';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
 import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
@@ -224,6 +230,7 @@ export default function ProjectWorkspace() {
                 <ResizableHandle />
                 <ResizablePanel defaultSize={25} minSize={20}>
                   <CanvasNodeInspector
+                    node={selectedCanvasNode}
                     details={selectedCanvasNodeDetails}
                     dialogDetails={selectedCanvasNodeDialogDetails}
                     scene={selectedScene}
@@ -252,6 +259,7 @@ export default function ProjectWorkspace() {
 }
 
 function CanvasNodeInspector({
+  node,
   details,
   dialogDetails,
   scene,
@@ -261,6 +269,7 @@ function CanvasNodeInspector({
   onSaveScene,
   onSaveShot,
 }: {
+  node?: CanvasNode;
   details: ReturnType<typeof getCanvasNodeDetails> | null;
   dialogDetails: CanvasNodeDialogDetails | null;
   scene?: Scene;
@@ -274,6 +283,12 @@ function CanvasNodeInspector({
   const [shotForm, setShotForm] = useState<ShotForm | null>(null);
   const [isSavingScene, setIsSavingScene] = useState(false);
   const [isSavingShot, setIsSavingShot] = useState(false);
+  const [selectedImageModelId, setSelectedImageModelId] = useState(
+    getDefaultGenerationModel('image').id,
+  );
+  const [selectedVideoModelId, setSelectedVideoModelId] = useState(
+    getDefaultGenerationModel('video').id,
+  );
 
   useEffect(() => {
     if (!scene) {
@@ -380,6 +395,18 @@ function CanvasNodeInspector({
       </div>
 
       <Separator className="mb-4" />
+
+      {node && (node.nodeType === 'shot' || node.nodeType === 'prompt') && (
+        <>
+          <GenerationModelSelectorPanel
+            selectedImageModelId={selectedImageModelId}
+            selectedVideoModelId={selectedVideoModelId}
+            onSelectedImageModelIdChange={setSelectedImageModelId}
+            onSelectedVideoModelIdChange={setSelectedVideoModelId}
+          />
+          <Separator className="mb-4" />
+        </>
+      )}
 
       {scene && sceneForm && (
         <>
@@ -545,6 +572,83 @@ function CanvasNodeInspector({
         onOpenChange={onDetailDialogOpenChange}
       />
     </div>
+  );
+}
+
+function GenerationModelSelectorPanel({
+  selectedImageModelId,
+  selectedVideoModelId,
+  onSelectedImageModelIdChange,
+  onSelectedVideoModelIdChange,
+}: {
+  selectedImageModelId: string;
+  selectedVideoModelId: string;
+  onSelectedImageModelIdChange: (modelId: string) => void;
+  onSelectedVideoModelIdChange: (modelId: string) => void;
+}) {
+  const selectedImageModel = getGenerationModelById(selectedImageModelId);
+  const selectedVideoModel = getGenerationModelById(selectedVideoModelId);
+
+  return (
+    <div className="mb-4 space-y-3 rounded-lg border bg-background p-3">
+      <div>
+        <h4 className="text-sm font-medium">生成模型</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          为后续生图、生视频操作预先选择模型策略。
+        </p>
+      </div>
+      <GenerationModelSelect
+        label="生图模型"
+        value={selectedImageModelId}
+        models={getGenerationModelsByType('image')}
+        selectedModel={selectedImageModel}
+        onValueChange={onSelectedImageModelIdChange}
+      />
+      <GenerationModelSelect
+        label="生视频模型"
+        value={selectedVideoModelId}
+        models={getGenerationModelsByType('video')}
+        selectedModel={selectedVideoModel}
+        onValueChange={onSelectedVideoModelIdChange}
+      />
+    </div>
+  );
+}
+
+function GenerationModelSelect({
+  label,
+  value,
+  models,
+  selectedModel,
+  onValueChange,
+}: {
+  label: string;
+  value: string;
+  models: GenerationModel[];
+  selectedModel?: GenerationModel;
+  onValueChange: (modelId: string) => void;
+}) {
+  return (
+    <label className="block space-y-1 text-xs text-muted-foreground">
+      {label}
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {models.map(model => (
+            <SelectItem key={model.id} value={model.id}>
+              {model.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selectedModel && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          {selectedModel.description}
+        </p>
+      )}
+    </label>
   );
 }
 
