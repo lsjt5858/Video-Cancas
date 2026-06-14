@@ -25,6 +25,7 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { getCanvasNodePresentation } from '../lib/canvasNodePresentation';
 import { getCanvasEdgePresentation } from '../lib/canvasEdgePresentation';
@@ -87,6 +88,7 @@ import {
   buildCanvasNodeGroups,
   CanvasNodeGroup,
 } from '../lib/canvasNodeGroups';
+import { buildCanvasSelectionExport } from '../lib/canvasSelectionExport';
 import { Asset, CanvasNode, GenerationTask, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
@@ -321,6 +323,26 @@ export default function CanvasView({
     await Promise.all(nodeIdsToDelete.map(nodeId => deleteCanvasNode(nodeId)));
     setSelectedNodeIds([]);
     onSelectedNodeIdChange(null);
+  };
+
+  const handleExportSelectedNodes = (format: 'json' | 'csv') => {
+    const exportData = buildCanvasSelectionExport({
+      selectedNodeIds,
+      nodes: visibleNodes,
+      scenes,
+      shots,
+    });
+    if (exportData.rows.length === 0) {
+      toast.error('请先选择要导出的节点');
+      return;
+    }
+
+    downloadTextFile(
+      `${exportData.filename}.${format}`,
+      format === 'json' ? exportData.json : exportData.csv,
+      format === 'json' ? 'application/json' : 'text/csv',
+    );
+    toast.success(`已导出 ${exportData.rows.length} 个节点`);
   };
 
   const handleMiniMapClick = (
@@ -637,6 +659,27 @@ export default function CanvasView({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {selectedNodeIds.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExportSelectedNodes('json')}
+                title="导出选中节点为 JSON"
+              >
+                <Download className="mr-1 size-3" />
+                导出 JSON
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExportSelectedNodes('csv')}
+                title="导出选中节点为 CSV"
+              >
+                导出 CSV
+              </Button>
+            </>
+          )}
           {selectedNodeIds.length > 1 && (
             <>
               <Button
@@ -1684,6 +1727,18 @@ function getCanvasAssetResultPreview(node: CanvasNode): CanvasAssetResultPreview
 function getStringData(node: CanvasNode, key: string): string | undefined {
   const value = node.data[key];
   return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function buildEdgePath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {
