@@ -40,6 +40,7 @@ import {
   createStoryboardGenerationPlan,
   createStoryboardShotPlan,
 } from '../lib/storyboardGeneration';
+import { createAssetInputFromCanvasResultNode } from '../lib/canvasAssetSave';
 import {
   GenerationModel,
   getDefaultGenerationModel,
@@ -77,6 +78,7 @@ export default function ProjectWorkspace() {
     getShotsByProject,
     createScene,
     createShot,
+    createAsset,
     deleteCanvasNode,
     updateScene,
     updateShot,
@@ -151,6 +153,18 @@ export default function ProjectWorkspace() {
     if (action === 'copy_info') {
       await copyNodeDetailsToClipboard(dialogDetails);
       toast.success('节点信息已复制');
+      return;
+    }
+
+    if (action === 'save_to_asset_library') {
+      const assetInput = createAssetInputFromCanvasResultNode(node);
+      if (!assetInput) {
+        toast.error('当前节点没有可保存的素材地址');
+        return;
+      }
+
+      createAsset(assetInput);
+      toast.success('已保存到素材库');
       return;
     }
 

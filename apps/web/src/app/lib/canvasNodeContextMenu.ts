@@ -1,8 +1,10 @@
 import { CanvasNode } from '../types';
+import { canSaveCanvasResultNodeToAssetLibrary } from './canvasAssetSave';
 
 export type CanvasNodeContextMenuAction =
   | 'view_details'
   | 'copy_info'
+  | 'save_to_asset_library'
   | 'generate_storyboard'
   | 'generate_image'
   | 'generate_video'
@@ -29,6 +31,14 @@ export function getCanvasNodeContextMenuItems(node: CanvasNode): CanvasNodeConte
       { action: 'generate_image', label: '生成图片（待接入）', disabled: true },
       { action: 'generate_video', label: '生成视频（待接入）', disabled: true },
     );
+  }
+
+  if (node.nodeType === 'image_result' || node.nodeType === 'video_result') {
+    items.push({
+      action: 'save_to_asset_library',
+      label: '保存到素材库',
+      disabled: !canSaveCanvasResultNodeToAssetLibrary(node),
+    });
   }
 
   items.push({ action: 'delete_node', label: '删除节点', disabled: false });

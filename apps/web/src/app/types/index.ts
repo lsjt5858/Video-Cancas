@@ -70,6 +70,9 @@ export interface Asset {
     format?: string;
     prompt?: string;
     generatedAt?: number;
+    source?: string;
+    sourceCanvasNodeId?: string;
+    sourceTaskId?: string;
   };
   createdAt: number;
 }

@@ -56,4 +56,21 @@ describe('canvas node context menu', () => {
       ]),
     );
   });
+
+  it('enables saving result nodes with urls to the asset library', () => {
+    expect(getCanvasNodeContextMenuItems({
+      ...makeNode('image_result'),
+      data: { url: 'https://example.com/image.png' },
+    })).toEqual(
+      expect.arrayContaining([
+        { action: 'save_to_asset_library', label: '保存到素材库', disabled: false },
+      ]),
+    );
+
+    expect(getCanvasNodeContextMenuItems(makeNode('video_result'))).toEqual(
+      expect.arrayContaining([
+        { action: 'save_to_asset_library', label: '保存到素材库', disabled: true },
+      ]),
+    );
+  });
 });
