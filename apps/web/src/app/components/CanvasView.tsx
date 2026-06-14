@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -49,6 +50,11 @@ import {
   CanvasVideoCandidate,
   getCanvasVideoCandidates,
 } from '../lib/canvasVideoCandidates';
+import {
+  CanvasResultSelectionType,
+  getCanvasResultSelectionButtonState,
+  getCanvasResultSelectionUpdate,
+} from '../lib/canvasResultSelection';
 import {
   calculateCenteredView,
   calculateFitView,
@@ -111,6 +117,7 @@ export default function CanvasView({
     getShotsByProject,
     getTasksByProject,
     getAssetsByProject,
+    updateShot,
     createCanvasNode,
     deleteCanvasNode,
     createCanvasEdge,
@@ -233,6 +240,19 @@ export default function CanvasView({
     setBlankMenu(null);
     onSelectedNodeIdChange(node.id);
     setSelectedNodeIds([node.id]);
+  };
+
+  const handleSelectCanvasResult = async (
+    shotId: string,
+    type: CanvasResultSelectionType,
+    url: string,
+  ) => {
+    try {
+      await updateShot(shotId, getCanvasResultSelectionUpdate(type, url));
+      toast.success(type === 'image' ? '已设为当前主图' : '已设为当前视频');
+    } catch {
+      toast.error(type === 'image' ? '设置当前主图失败' : '设置当前视频失败');
+    }
   };
 
   const handleDeleteSelectedNodes = async () => {
@@ -756,6 +776,7 @@ export default function CanvasView({
                   onToggleSceneCollapse={handleToggleSceneCollapse}
                   onConnectionStart={handleConnectionStart}
                   onMenuAction={onNodeContextMenuAction}
+                  onSelectResult={handleSelectCanvasResult}
                 />
               </div>
             );
@@ -959,6 +980,7 @@ function CanvasNodeCard({
   onToggleSceneCollapse,
   onConnectionStart,
   onMenuAction,
+  onSelectResult,
 }: {
   node: CanvasNode;
   isSelected: boolean;
@@ -971,6 +993,7 @@ function CanvasNodeCard({
   onToggleSceneCollapse: (sceneId: string, nodeId: string) => void;
   onConnectionStart: (e: React.MouseEvent, nodeId: string) => void;
   onMenuAction: (action: CanvasNodeContextMenuAction, node: CanvasNode) => void;
+  onSelectResult: (shotId: string, type: CanvasResultSelectionType, url: string) => Promise<void>;
 }) {
   const presentation = getCanvasNodePresentation(node.nodeType);
   const title = getSelectedNodeTitle(node, scene, shot);
@@ -1042,12 +1065,14 @@ function CanvasNodeCard({
             <CanvasImageCandidateList
               candidates={imageCandidates}
               description={shot?.description ?? title}
+              onSelect={(url) => shot && onSelectResult(shot.id, 'image', url)}
             />
           )}
           {videoCandidates.length > 0 && (
             <CanvasVideoCandidateList
               candidates={videoCandidates}
               description={shot?.description ?? title}
+              onSelect={(url) => shot && onSelectResult(shot.id, 'video', url)}
             />
           )}
           {progressItems.length > 0 && (
@@ -1170,9 +1195,11 @@ function CanvasGenerationResultPreviewList({
 function CanvasImageCandidateList({
   candidates,
   description,
+  onSelect,
 }: {
   candidates: CanvasImageCandidate[];
   description: string;
+  onSelect: (url: string) => Promise<void> | undefined;
 }) {
   return (
     <div className="mt-2 rounded border bg-muted/10 p-2">
@@ -1181,35 +1208,58 @@ function CanvasImageCandidateList({
         <span className="text-muted-foreground">{candidates.length} 张</span>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        {candidates.map(candidate => (
-          <a
-            key={candidate.assetId}
-            href={candidate.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={candidate.isSelected ? `${candidate.label} · 当前主图` : candidate.label}
-            className={[
-              'group relative block overflow-hidden rounded border bg-muted',
-              candidate.isSelected ? 'border-green-500 ring-1 ring-green-500' : 'border-border',
-            ].join(' ')}
-            onMouseDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <img
-              src={candidate.thumbnailUrl}
-              alt={`${description} ${candidate.label}`}
-              className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
-            />
-            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
-              {candidate.isSelected ? '当前' : candidate.label}
+        {candidates.map(candidate => {
+          const selection = getCanvasResultSelectionButtonState('image', candidate.isSelected);
+
+          return (
+            <div key={candidate.assetId} className="min-w-0">
+              <a
+                href={candidate.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={candidate.isSelected ? `${candidate.label} · 当前主图` : candidate.label}
+                className={[
+                  'group relative block overflow-hidden rounded border bg-muted',
+                  candidate.isSelected ? 'border-green-500 ring-1 ring-green-500' : 'border-border',
+                ].join(' ')}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <img
+                  src={candidate.thumbnailUrl}
+                  alt={`${description} ${candidate.label}`}
+                  className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                  {candidate.isSelected ? '当前' : candidate.label}
+                </div>
+              </a>
+              <Button
+                type="button"
+                variant={candidate.isSelected ? 'secondary' : 'outline'}
+                size="sm"
+                disabled={selection.disabled}
+                className="mt-1 h-6 w-full px-1 text-[10px]"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void onSelect(candidate.url);
+                }}
+              >
+                {selection.label}
+              </Button>
             </div>
-          </a>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1218,9 +1268,11 @@ function CanvasImageCandidateList({
 function CanvasVideoCandidateList({
   candidates,
   description,
+  onSelect,
 }: {
   candidates: CanvasVideoCandidate[];
   description: string;
+  onSelect: (url: string) => Promise<void> | undefined;
 }) {
   return (
     <div className="mt-2 rounded border bg-muted/10 p-2">
@@ -1229,44 +1281,67 @@ function CanvasVideoCandidateList({
         <span className="text-muted-foreground">{candidates.length} 个</span>
       </div>
       <div className="grid gap-1.5">
-        {candidates.map(candidate => (
-          <a
-            key={candidate.assetId}
-            href={candidate.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={candidate.isSelected ? `${candidate.label} · 当前视频` : candidate.label}
-            className={[
-              'group relative block overflow-hidden rounded border bg-muted',
-              candidate.isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-border',
-            ].join(' ')}
-            onMouseDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <div className="relative h-16 overflow-hidden">
-              <video
-                src={candidate.url}
-                poster={candidate.thumbnailUrl !== candidate.url ? candidate.thumbnailUrl : undefined}
-                muted
-                playsInline
-                preload="metadata"
-                className="h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
-                <Video className="size-4" />
-              </div>
+        {candidates.map(candidate => {
+          const selection = getCanvasResultSelectionButtonState('video', candidate.isSelected);
+
+          return (
+            <div key={candidate.assetId} className="grid grid-cols-[1fr_auto] gap-1.5">
+              <a
+                href={candidate.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={candidate.isSelected ? `${candidate.label} · 当前视频` : candidate.label}
+                className={[
+                  'group relative block overflow-hidden rounded border bg-muted',
+                  candidate.isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-border',
+                ].join(' ')}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <div className="relative h-16 overflow-hidden">
+                  <video
+                    src={candidate.url}
+                    poster={candidate.thumbnailUrl !== candidate.url ? candidate.thumbnailUrl : undefined}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                    <Video className="size-4" />
+                  </div>
+                </div>
+                <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                  {candidate.isSelected ? '当前' : candidate.label}
+                </div>
+                <span className="sr-only">{description} {candidate.label}</span>
+              </a>
+              <Button
+                type="button"
+                variant={candidate.isSelected ? 'secondary' : 'outline'}
+                size="sm"
+                disabled={selection.disabled}
+                className="h-full w-16 px-1 text-[10px]"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void onSelect(candidate.url);
+                }}
+              >
+                {selection.label}
+              </Button>
             </div>
-            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
-              {candidate.isSelected ? '当前' : candidate.label}
-            </div>
-            <span className="sr-only">{description} {candidate.label}</span>
-          </a>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
