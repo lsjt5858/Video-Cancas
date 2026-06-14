@@ -83,6 +83,7 @@ import { createCanvasBatchStyleApplicationPlan } from '../lib/canvasBatchStyle';
 import { ImageGenerationParams } from '../lib/imageGenerationParams';
 import {
   createCanvasSnapshot,
+  loadCanvasSnapshots,
   saveCanvasSnapshot,
 } from '../lib/canvasSnapshot';
 import {
@@ -170,6 +171,7 @@ export default function CanvasView({
   const [blankMenu, setBlankMenu] = useState<BlankCanvasMenuState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [snapshotCount, setSnapshotCount] = useState(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { visibleNodes, visibleEdges } = useMemo(
     () => getVisibleCanvasGraph(nodes, edges, shots, collapsedSceneIds),
@@ -213,6 +215,14 @@ export default function CanvasView({
     () => buildCanvasNodeGroups({ nodes: visibleNodes, scenes, shots }),
     [visibleNodes, scenes, shots],
   );
+
+  useEffect(() => {
+    setSnapshotCount(
+      loadCanvasSnapshots(window.localStorage)
+        .filter(snapshot => snapshot.projectId === projectId)
+        .length,
+    );
+  }, [projectId]);
 
   const handleZoomIn = () => {
     setCanvas(prev => ({ ...prev, scale: Math.min(prev.scale + 0.1, 2) }));
@@ -423,7 +433,8 @@ export default function CanvasView({
       nodes,
       edges,
     });
-    saveCanvasSnapshot(window.localStorage, snapshot);
+    const snapshots = saveCanvasSnapshot(window.localStorage, snapshot);
+    setSnapshotCount(snapshots.filter(item => item.projectId === projectId).length);
     toast.success(`已保存画布快照：${snapshot.nodeCount} 个节点，${snapshot.edgeCount} 条连线`);
   };
 
@@ -792,7 +803,7 @@ export default function CanvasView({
             onClick={handleSaveSnapshot}
             title="保存当前画布节点和连线快照到本地历史"
           >
-            保存快照
+            保存快照{snapshotCount > 0 ? ` (${snapshotCount})` : ''}
           </Button>
           {selectedNodeIds.length > 1 && (
             <>

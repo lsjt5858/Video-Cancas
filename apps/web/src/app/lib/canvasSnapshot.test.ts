@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { CanvasEdge, CanvasNode } from '../types';
 import {
   createCanvasSnapshot,
+  loadCanvasSnapshots,
   prependCanvasSnapshot,
+  saveCanvasSnapshot,
 } from './canvasSnapshot';
 
 const nodes: CanvasNode[] = [
@@ -68,4 +70,46 @@ describe('canvas snapshot', () => {
 
     expect(prependCanvasSnapshot([first], second, 1)).toEqual([second]);
   });
+
+  it('loads and saves snapshots through storage', () => {
+    const storage = new MemoryStorage();
+    const snapshot = createCanvasSnapshot({
+      projectId: 'project-1',
+      title: 'stored',
+      nodes,
+      edges,
+      createdAt: 3,
+    });
+
+    expect(saveCanvasSnapshot(storage, snapshot)).toEqual([snapshot]);
+    expect(loadCanvasSnapshots(storage)).toEqual([snapshot]);
+  });
 });
+
+class MemoryStorage implements Storage {
+  private values = new Map<string, string>();
+
+  get length() {
+    return this.values.size;
+  }
+
+  clear(): void {
+    this.values.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number): string | null {
+    return Array.from(this.values.keys())[index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+}
