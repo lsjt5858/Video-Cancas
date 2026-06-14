@@ -7,6 +7,7 @@ export type CanvasBatchGenerationItem = {
   shotId: string;
   shotNumber: number;
   prompt: string;
+  isRegeneration: boolean;
 };
 
 export type CanvasBatchGenerationSkippedReason =
@@ -71,6 +72,7 @@ export function createCanvasBatchGenerationPlan(
       shotId: shot.id,
       shotNumber: shot.shotNumber,
       prompt: shot.prompt,
+      isRegeneration: input.type === 'image' ? Boolean(shot.imageUrl) : Boolean(shot.videoUrl),
     });
   });
 
@@ -79,4 +81,13 @@ export function createCanvasBatchGenerationPlan(
     items,
     skipped,
   };
+}
+
+export function getCanvasBatchGenerationLabel(plan: CanvasBatchGenerationPlan): string {
+  const hasRegeneration = plan.items.some(item => item.isRegeneration);
+  if (plan.type === 'image') {
+    return hasRegeneration ? '批量重新生图' : '批量生图';
+  }
+
+  return hasRegeneration ? '批量重新生视频' : '批量生视频';
 }

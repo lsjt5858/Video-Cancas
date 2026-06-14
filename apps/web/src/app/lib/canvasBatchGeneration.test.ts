@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CanvasNode, Shot } from '../types';
-import { createCanvasBatchGenerationPlan } from './canvasBatchGeneration';
+import {
+  createCanvasBatchGenerationPlan,
+  getCanvasBatchGenerationLabel,
+} from './canvasBatchGeneration';
 
 function makeNode(
   id: string,
@@ -54,6 +57,7 @@ describe('canvas batch generation', () => {
         shotId: 'shot-1',
         shotNumber: 1,
         prompt: 'prompt shot-1',
+        isRegeneration: false,
       },
     ]);
     expect(plan.skipped).toEqual([
@@ -79,5 +83,34 @@ describe('canvas batch generation', () => {
     expect(plan.skipped).toEqual([
       { nodeId: 'shot-node-2', reason: 'missing_image' },
     ]);
+  });
+
+  it('uses regeneration labels when any planned shot already has a result', () => {
+    const imagePlan = createCanvasBatchGenerationPlan({
+      type: 'image',
+      selectedNodeIds: ['shot-node-1', 'shot-node-2'],
+      nodes: [
+        makeNode('shot-node-1', 'shot', 'shot-1'),
+        makeNode('shot-node-2', 'shot', 'shot-2'),
+      ],
+      shots: [
+        makeShot('shot-1'),
+        makeShot('shot-2', { imageUrl: 'https://example.com/existing.png' }),
+      ],
+    });
+    const videoPlan = createCanvasBatchGenerationPlan({
+      type: 'video',
+      selectedNodeIds: ['shot-node-2'],
+      nodes: [makeNode('shot-node-2', 'shot', 'shot-2')],
+      shots: [
+        makeShot('shot-2', {
+          imageUrl: 'https://example.com/existing.png',
+          videoUrl: 'https://example.com/existing.mp4',
+        }),
+      ],
+    });
+
+    expect(getCanvasBatchGenerationLabel(imagePlan)).toBe('批量重新生图');
+    expect(getCanvasBatchGenerationLabel(videoPlan)).toBe('批量重新生视频');
   });
 });

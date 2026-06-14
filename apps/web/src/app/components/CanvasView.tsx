@@ -77,6 +77,7 @@ import { getVisibleCanvasGraph } from '../lib/canvasVisibility';
 import {
   CanvasBatchGenerationType,
   createCanvasBatchGenerationPlan,
+  getCanvasBatchGenerationLabel,
 } from '../lib/canvasBatchGeneration';
 import {
   BlankCanvasNodeType,
@@ -165,6 +166,24 @@ export default function CanvasView({
   const { visibleNodes, visibleEdges } = useMemo(
     () => getVisibleCanvasGraph(nodes, edges, shots, collapsedSceneIds),
     [nodes, edges, shots, collapsedSceneIds],
+  );
+  const imageBatchGenerationPlan = useMemo(
+    () => createCanvasBatchGenerationPlan({
+      type: 'image',
+      selectedNodeIds,
+      nodes: visibleNodes,
+      shots,
+    }),
+    [selectedNodeIds, visibleNodes, shots],
+  );
+  const videoBatchGenerationPlan = useMemo(
+    () => createCanvasBatchGenerationPlan({
+      type: 'video',
+      selectedNodeIds,
+      nodes: visibleNodes,
+      shots,
+    }),
+    [selectedNodeIds, visibleNodes, shots],
   );
 
   const selectedNode = visibleNodes.find(node => node.id === selectedNodeId);
@@ -708,7 +727,7 @@ export default function CanvasView({
                 onClick={() => handleGenerateSelectedShots('image')}
                 title="为选中镜头批量提交生图任务"
               >
-                批量生图
+                {getCanvasBatchGenerationLabel(imageBatchGenerationPlan)}
               </Button>
               <Button
                 variant="outline"
@@ -716,7 +735,7 @@ export default function CanvasView({
                 onClick={() => handleGenerateSelectedShots('video')}
                 title="为选中镜头批量提交生视频任务"
               >
-                批量生视频
+                {getCanvasBatchGenerationLabel(videoBatchGenerationPlan)}
               </Button>
             </>
           )}
