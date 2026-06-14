@@ -46,7 +46,16 @@ describe('canvas generation progress', () => {
 
     expect(items).toEqual([
       { taskId: 'completed-image', type: 'image', label: '图片生成完成', tone: 'success', progressLabel: '100%' },
-      { taskId: 'failed-video', type: 'video', label: '视频生成失败', tone: 'error', progressLabel: '失败', description: 'Provider timeout' },
+      {
+        taskId: 'failed-video',
+        type: 'video',
+        label: '视频生成失败',
+        tone: 'error',
+        progressLabel: '失败',
+        description: 'Provider timeout',
+        retryAction: 'generate_video',
+        retryLabel: '重试生视频',
+      },
     ]);
   });
 

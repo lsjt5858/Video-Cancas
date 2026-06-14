@@ -1,4 +1,5 @@
 import { GenerationTask } from '../types';
+import { CanvasNodeContextMenuAction } from './canvasNodeContextMenu';
 
 export type CanvasGenerationProgressItem = {
   taskId: string;
@@ -7,6 +8,8 @@ export type CanvasGenerationProgressItem = {
   tone: 'muted' | 'active' | 'success' | 'error';
   progressLabel: string;
   description?: string;
+  retryAction?: Extract<CanvasNodeContextMenuAction, 'generate_image' | 'generate_video'>;
+  retryLabel?: string;
 };
 
 export function getLatestGenerationTaskByType(
@@ -64,6 +67,8 @@ function formatGenerationTaskProgress(task: GenerationTask): CanvasGenerationPro
       tone: 'error',
       progressLabel: '失败',
       ...(task.error ? { description: task.error } : {}),
+      retryAction: task.type === 'image' ? 'generate_image' : 'generate_video',
+      retryLabel: task.type === 'image' ? '重试生图' : '重试生视频',
     };
   }
 

@@ -1024,7 +1024,10 @@ function CanvasNodeCard({
             />
           )}
           {progressItems.length > 0 && (
-            <CanvasGenerationProgressList items={progressItems} />
+            <CanvasGenerationProgressList
+              items={progressItems}
+              onRetry={(action) => onMenuAction(action, node)}
+            />
           )}
           {generationActions.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1139,8 +1142,10 @@ function CanvasGenerationResultPreviewList({
 
 function CanvasGenerationProgressList({
   items,
+  onRetry,
 }: {
   items: CanvasGenerationProgressItem[];
+  onRetry: (action: NonNullable<CanvasGenerationProgressItem['retryAction']>) => void;
 }) {
   return (
     <div className="mt-3 space-y-1.5">
@@ -1164,6 +1169,27 @@ function CanvasGenerationProgressList({
             <div className="mt-1 line-clamp-2 text-muted-foreground">
               {item.description}
             </div>
+          )}
+          {item.retryAction && item.retryLabel && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 h-6 px-2 text-[11px]"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (item.retryAction) {
+                  onRetry(item.retryAction);
+                }
+              }}
+            >
+              {item.retryLabel}
+            </Button>
           )}
         </div>
       ))}
