@@ -46,6 +46,13 @@ import {
   getGenerationModelById,
   getGenerationModelsByType,
 } from '../lib/generationModels';
+import {
+  IMAGE_ASPECT_RATIO_OPTIONS,
+  IMAGE_REFERENCE_MODE_OPTIONS,
+  IMAGE_STYLE_OPTIONS,
+  ImageGenerationParams,
+  createDefaultImageGenerationParams,
+} from '../lib/imageGenerationParams';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
 import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
@@ -289,6 +296,9 @@ function CanvasNodeInspector({
   const [selectedVideoModelId, setSelectedVideoModelId] = useState(
     getDefaultGenerationModel('video').id,
   );
+  const [imageParams, setImageParams] = useState<ImageGenerationParams>(
+    createDefaultImageGenerationParams,
+  );
 
   useEffect(() => {
     if (!scene) {
@@ -403,6 +413,10 @@ function CanvasNodeInspector({
             selectedVideoModelId={selectedVideoModelId}
             onSelectedImageModelIdChange={setSelectedImageModelId}
             onSelectedVideoModelIdChange={setSelectedVideoModelId}
+          />
+          <ImageGenerationParamsPanel
+            params={imageParams}
+            onParamsChange={setImageParams}
           />
           <Separator className="mb-4" />
         </>
@@ -649,6 +663,119 @@ function GenerationModelSelect({
         </p>
       )}
     </label>
+  );
+}
+
+function ImageGenerationParamsPanel({
+  params,
+  onParamsChange,
+}: {
+  params: ImageGenerationParams;
+  onParamsChange: (params: ImageGenerationParams) => void;
+}) {
+  const updateParams = <K extends keyof ImageGenerationParams>(
+    field: K,
+    value: ImageGenerationParams[K],
+  ) => {
+    onParamsChange({ ...params, [field]: value });
+  };
+
+  return (
+    <div className="mb-4 space-y-3 rounded-lg border bg-background p-3">
+      <div>
+        <h4 className="text-sm font-medium">生图参数</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          设置画幅、风格、参考输入、负向提示词、种子和候选数量。
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="space-y-1 text-xs text-muted-foreground">
+          画幅
+          <Select
+            value={params.aspectRatio}
+            onValueChange={(value) => updateParams('aspectRatio', value as ImageGenerationParams['aspectRatio'])}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {IMAGE_ASPECT_RATIO_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="space-y-1 text-xs text-muted-foreground">
+          风格
+          <Select
+            value={params.style}
+            onValueChange={(value) => updateParams('style', value as ImageGenerationParams['style'])}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {IMAGE_STYLE_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </div>
+      <label className="space-y-1 text-xs text-muted-foreground">
+        参考图
+        <Select
+          value={params.referenceMode}
+          onValueChange={(value) => updateParams('referenceMode', value as ImageGenerationParams['referenceMode'])}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {IMAGE_REFERENCE_MODE_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
+      <label className="space-y-1 text-xs text-muted-foreground">
+        负向提示词
+        <Textarea
+          value={params.negativePrompt}
+          onChange={(event) => updateParams('negativePrompt', event.target.value)}
+          placeholder="例如：低清晰度、畸形手部、文字水印"
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="space-y-1 text-xs text-muted-foreground">
+          种子
+          <Input
+            value={params.seed}
+            onChange={(event) => updateParams('seed', event.target.value)}
+            placeholder="留空随机"
+          />
+        </label>
+        <label className="space-y-1 text-xs text-muted-foreground">
+          候选数量
+          <Input
+            type="number"
+            min={1}
+            max={8}
+            value={params.candidateCount}
+            onChange={(event) => updateParams(
+              'candidateCount',
+              Number.parseInt(event.target.value, 10) || 1,
+            )}
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 
