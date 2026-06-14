@@ -31,5 +31,13 @@ describe('canvas node presentation', () => {
       label: '提示词',
       accentClassName: 'border-l-emerald-500',
     });
+    expect(getCanvasNodePresentation('image_result')).toMatchObject({
+      label: '图片结果',
+      accentClassName: 'border-l-green-500',
+    });
+    expect(getCanvasNodePresentation('video_result')).toMatchObject({
+      label: '视频结果',
+      accentClassName: 'border-l-blue-500',
+    });
   });
 });

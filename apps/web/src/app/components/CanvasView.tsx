@@ -78,6 +78,12 @@ import {
   createBlankCanvasNodeInput,
 } from '../lib/canvasBlankMenu';
 import {
+  CANVAS_ASSET_MIME_TYPE,
+  createCanvasAssetDragData,
+  createCanvasNodeInputFromAssetDrop,
+  parseCanvasAssetDragData,
+} from '../lib/canvasAssetDrop';
+import {
   buildCanvasNodeGroups,
   CanvasNodeGroup,
 } from '../lib/canvasNodeGroups';
@@ -240,6 +246,57 @@ export default function CanvasView({
     setBlankMenu(null);
     onSelectedNodeIdChange(node.id);
     setSelectedNodeIds([node.id]);
+  };
+
+  const handleAssetDragStart = (event: React.DragEvent, asset: Asset) => {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(
+      CANVAS_ASSET_MIME_TYPE,
+      JSON.stringify(createCanvasAssetDragData(asset)),
+    );
+    event.dataTransfer.setData('text/plain', asset.url);
+  };
+
+  const handleCanvasDragOver = (event: React.DragEvent) => {
+    if (!Array.from(event.dataTransfer.types).includes(CANVAS_ASSET_MIME_TYPE)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleCanvasDrop = async (event: React.DragEvent) => {
+    const assetData = parseCanvasAssetDragData(
+      event.dataTransfer.getData(CANVAS_ASSET_MIME_TYPE),
+    );
+    if (!assetData) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (assetData.projectId !== projectId) {
+      toast.error('只能拖入当前项目的素材');
+      return;
+    }
+
+    try {
+      const node = await createCanvasNode(
+        projectId,
+        createCanvasNodeInputFromAssetDrop(
+          assetData,
+          getCanvasPointFromClient(event.clientX, event.clientY),
+        ),
+      );
+      setBlankMenu(null);
+      onSelectedNodeIdChange(node.id);
+      setSelectedNodeIds([node.id]);
+      toast.success('已添加素材节点');
+    } catch {
+      toast.error('添加素材节点失败');
+    }
   };
 
   const handleSelectCanvasResult = async (
@@ -496,17 +553,21 @@ export default function CanvasView({
     setSelectedNodeIds([]);
   };
 
-  const getCanvasPoint = (e: React.MouseEvent) => {
+  const getCanvasPointFromClient = (clientX: number, clientY: number) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) {
       return { x: 0, y: 0 };
     }
 
     return {
-      x: (e.clientX - rect.left - canvas.offsetX) / canvas.scale,
-      y: (e.clientY - rect.top - canvas.offsetY) / canvas.scale,
+      x: (clientX - rect.left - canvas.offsetX) / canvas.scale,
+      y: (clientY - rect.top - canvas.offsetY) / canvas.scale,
     };
   };
+
+  const getCanvasPoint = (e: React.MouseEvent) => (
+    getCanvasPointFromClient(e.clientX, e.clientY)
+  );
 
   const connectionSource = connectingFromNodeId
     ? visibleNodes.find(node => node.id === connectingFromNodeId)
@@ -568,6 +629,12 @@ export default function CanvasView({
               </div>
             )}
           </div>
+          {assets.length > 0 && (
+            <CanvasAssetDropTray
+              assets={assets.slice(0, 6)}
+              onDragStart={handleAssetDragStart}
+            />
+          )}
         </div>
         <div className="flex items-center gap-2">
           {selectedNodeIds.length > 1 && (
@@ -664,6 +731,8 @@ export default function CanvasView({
         onMouseLeave={handleMouseUp}
         onContextMenu={handleCanvasContextMenu}
         onWheel={handleWheel}
+        onDragOver={handleCanvasDragOver}
+        onDrop={(event) => void handleCanvasDrop(event)}
       >
         <div
           style={{
@@ -880,6 +949,57 @@ function CanvasNodeGroupFrame({ group }: { group: CanvasNodeGroup }) {
   );
 }
 
+function CanvasAssetDropTray({
+  assets,
+  onDragStart,
+}: {
+  assets: Asset[];
+  onDragStart: (event: React.DragEvent, asset: Asset) => void;
+}) {
+  return (
+    <div className="flex max-w-[360px] items-center gap-1.5 rounded-md border bg-background px-2 py-1">
+      <span className="shrink-0 text-xs text-muted-foreground">拖入画布</span>
+      <div className="flex min-w-0 gap-1">
+        {assets.map(asset => (
+          <button
+            key={asset.id}
+            type="button"
+            draggable
+            onDragStart={(event) => onDragStart(event, asset)}
+            title={asset.type === 'image' ? '拖拽图片素材到画布' : '拖拽视频素材到画布'}
+            className="relative size-8 shrink-0 overflow-hidden rounded border bg-muted"
+          >
+            {asset.type === 'image' ? (
+              <img
+                src={asset.thumbnailUrl ?? asset.url}
+                alt="图片素材"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <>
+                {asset.thumbnailUrl ? (
+                  <img
+                    src={asset.thumbnailUrl}
+                    alt="视频素材"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Video className="size-4 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                  <Video className="size-3" />
+                </div>
+              </>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CanvasMiniMap({
   nodes,
   selectedNodeId,
@@ -1004,6 +1124,7 @@ function CanvasNodeCard({
   const resultPreviews = getCanvasGenerationResultPreviews(shot, tasks);
   const imageCandidates = getCanvasImageCandidates(shot, assets, 6);
   const videoCandidates = getCanvasVideoCandidates(shot, assets, 4);
+  const assetResultPreview = getCanvasAssetResultPreview(node);
 
   return (
     <ContextMenu>
@@ -1055,6 +1176,9 @@ function CanvasNodeCard({
           </div>
           <div className="text-sm font-medium line-clamp-2 mb-1">{title}</div>
           <div className="text-xs text-muted-foreground line-clamp-3">{description}</div>
+          {assetResultPreview && (
+            <CanvasAssetResultPreviewCard preview={assetResultPreview} />
+          )}
           {resultPreviews.length > 0 && (
             <CanvasGenerationResultPreviewList
               previews={resultPreviews}
@@ -1132,6 +1256,59 @@ function CanvasNodeCard({
         ))}
       </ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+type CanvasAssetResultPreview = {
+  type: 'image' | 'video';
+  url: string;
+  thumbnailUrl: string;
+  label: string;
+};
+
+function CanvasAssetResultPreviewCard({ preview }: { preview: CanvasAssetResultPreview }) {
+  return (
+    <a
+      href={preview.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group mt-2 block overflow-hidden rounded border bg-muted/20"
+      onMouseDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <div className="relative h-24 overflow-hidden bg-muted">
+        {preview.type === 'image' ? (
+          <img
+            src={preview.thumbnailUrl}
+            alt={preview.label}
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+          />
+        ) : (
+          <>
+            <video
+              src={preview.url}
+              poster={preview.thumbnailUrl !== preview.url ? preview.thumbnailUrl : undefined}
+              muted
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+              <Video className="size-5" />
+            </div>
+          </>
+        )}
+      </div>
+      <div className="flex items-center justify-between px-2 py-1 text-[11px]">
+        <span className="font-medium">{preview.label}</span>
+        <span className="text-muted-foreground">打开素材</span>
+      </div>
+    </a>
   );
 }
 
@@ -1424,6 +1601,12 @@ function NodeStatusIcons({ node, shot }: { node: CanvasNode; shot?: Shot }) {
   if (node.nodeType === 'scene') {
     return <MapPin className="size-3 text-amber-600" />;
   }
+  if (node.nodeType === 'image_result') {
+    return <Image className="size-3 text-green-600" />;
+  }
+  if (node.nodeType === 'video_result') {
+    return <Video className="size-3 text-blue-600" />;
+  }
   return (
     <div className="flex gap-1">
       {shot?.imageUrl && <Image className="size-3 text-green-600" />}
@@ -1446,6 +1629,9 @@ function getSelectedNodeTitle(
   if (node.nodeType === 'prompt' && shot) {
     return node.title || `镜头 ${shot.shotNumber} 提示词`;
   }
+  if ((node.nodeType === 'image_result' || node.nodeType === 'video_result') && node.title) {
+    return node.title;
+  }
   return node.title || getCanvasNodePresentation(node.nodeType).label;
 }
 
@@ -1465,7 +1651,39 @@ function getSelectedNodeDescription(
   if (node.nodeType === 'prompt' && shot) {
     return shot.prompt || String(node.data.prompt || '未设置提示词');
   }
+  if (node.nodeType === 'image_result' || node.nodeType === 'video_result') {
+    const shotId = getStringData(node, 'shot_id');
+    const url = getStringData(node, 'url');
+    return [shotId ? `来源镜头 ${shotId}` : '未关联镜头', url ? '已绑定素材地址' : '未绑定素材地址']
+      .join(' · ');
+  }
   return '项目剧本入口，后续可联动角色、场景和镜头节点。';
+}
+
+function getCanvasAssetResultPreview(node: CanvasNode): CanvasAssetResultPreview | null {
+  if (node.nodeType !== 'image_result' && node.nodeType !== 'video_result') {
+    return null;
+  }
+
+  const url = getStringData(node, 'url');
+  if (!url) {
+    return null;
+  }
+
+  const assetType = getStringData(node, 'asset_type') === 'video' || node.nodeType === 'video_result'
+    ? 'video'
+    : 'image';
+  return {
+    type: assetType,
+    url,
+    thumbnailUrl: getStringData(node, 'thumbnail_url') ?? url,
+    label: assetType === 'image' ? '图片素材' : '视频素材',
+  };
+}
+
+function getStringData(node: CanvasNode, key: string): string | undefined {
+  const value = node.data[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 function buildEdgePath(sourceX: number, sourceY: number, targetX: number, targetY: number): string {

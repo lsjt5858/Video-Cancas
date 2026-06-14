@@ -42,6 +42,21 @@ const PRESENTATION_BY_TYPE: Partial<Record<CanvasNode['nodeType'], CanvasNodePre
     accentClassName: 'border-l-emerald-500',
     badgeClassName: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
+  image_result: {
+    label: '图片结果',
+    accentClassName: 'border-l-green-500',
+    badgeClassName: 'bg-green-50 text-green-700 border-green-200',
+  },
+  video_result: {
+    label: '视频结果',
+    accentClassName: 'border-l-blue-500',
+    badgeClassName: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  export: {
+    label: '导出',
+    accentClassName: 'border-l-slate-500',
+    badgeClassName: 'bg-slate-50 text-slate-700 border-slate-200',
+  },
 };
 
 const DEFAULT_PRESENTATION: CanvasNodePresentation = {

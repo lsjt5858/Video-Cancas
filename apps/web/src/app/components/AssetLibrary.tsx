@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Image, Video, Download, ExternalLink, Trash2, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Asset } from '../types';
+import { CANVAS_ASSET_MIME_TYPE, createCanvasAssetDragData } from '../lib/canvasAssetDrop';
 
 interface AssetLibraryProps {
   projectId: string;
@@ -33,6 +34,15 @@ export default function AssetLibrary({ projectId }: AssetLibraryProps) {
     }
   };
 
+  const handleDragStart = (event: React.DragEvent, asset: Asset) => {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(
+      CANVAS_ASSET_MIME_TYPE,
+      JSON.stringify(createCanvasAssetDragData(asset)),
+    );
+    event.dataTransfer.setData('text/plain', asset.url);
+  };
+
   const getShotInfo = (shotId?: string) => {
     if (!shotId) return null;
     return shots.find(s => s.id === shotId);
@@ -42,14 +52,20 @@ export default function AssetLibrary({ projectId }: AssetLibraryProps) {
     return new Date(timestamp).toLocaleString('zh-CN');
   };
 
-  const AssetGrid = ({ assets, type }: { assets: Asset[]; type: 'image' | 'video' }) => (
+  const AssetGrid = ({ assets }: { assets: Asset[] }) => (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       {assets.map((asset) => {
         const shot = getShotInfo(asset.shotId);
         return (
-          <Card key={asset.id} className="overflow-hidden group">
+          <Card
+            key={asset.id}
+            draggable
+            onDragStart={(event) => handleDragStart(event, asset)}
+            className="overflow-hidden group cursor-grab active:cursor-grabbing"
+            title="拖拽到画布中创建资产节点"
+          >
             <div className="relative aspect-video bg-muted">
-              {type === 'image' ? (
+              {asset.type === 'image' ? (
                 <img
                   src={asset.url}
                   alt="Asset"
@@ -93,6 +109,12 @@ export default function AssetLibrary({ projectId }: AssetLibraryProps) {
               </div>
             </div>
             <CardContent className="p-3">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <Badge variant="outline" className="text-[10px]">
+                  {asset.type === 'image' ? '图片' : '视频'}
+                </Badge>
+                <span className="text-[10px] text-muted-foreground">可拖入画布</span>
+              </div>
               <div className="text-xs text-muted-foreground line-clamp-1">
                 {shot ? `镜头 ${shot.shotNumber}` : '未关联镜头'}
               </div>
@@ -152,7 +174,7 @@ export default function AssetLibrary({ projectId }: AssetLibraryProps) {
                 </CardContent>
               </Card>
             ) : (
-              <AssetGrid assets={assets} type="image" />
+              <AssetGrid assets={assets} />
             )}
           </TabsContent>
 
@@ -164,7 +186,7 @@ export default function AssetLibrary({ projectId }: AssetLibraryProps) {
                 </CardContent>
               </Card>
             ) : (
-              <AssetGrid assets={images} type="image" />
+              <AssetGrid assets={images} />
             )}
           </TabsContent>
 
@@ -176,7 +198,7 @@ export default function AssetLibrary({ projectId }: AssetLibraryProps) {
                 </CardContent>
               </Card>
             ) : (
-              <AssetGrid assets={videos} type="video" />
+              <AssetGrid assets={videos} />
             )}
           </TabsContent>
         </Tabs>
