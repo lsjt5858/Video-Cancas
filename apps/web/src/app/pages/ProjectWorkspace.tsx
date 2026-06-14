@@ -53,6 +53,14 @@ import {
   ImageGenerationParams,
   createDefaultImageGenerationParams,
 } from '../lib/imageGenerationParams';
+import {
+  VIDEO_CAMERA_MOTION_OPTIONS,
+  VIDEO_DURATION_OPTIONS,
+  VIDEO_FRAME_MODE_OPTIONS,
+  VIDEO_REFERENCE_MODE_OPTIONS,
+  VideoGenerationParams,
+  createDefaultVideoGenerationParams,
+} from '../lib/videoGenerationParams';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
 import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
@@ -299,6 +307,9 @@ function CanvasNodeInspector({
   const [imageParams, setImageParams] = useState<ImageGenerationParams>(
     createDefaultImageGenerationParams,
   );
+  const [videoParams, setVideoParams] = useState<VideoGenerationParams>(
+    createDefaultVideoGenerationParams,
+  );
 
   useEffect(() => {
     if (!scene) {
@@ -417,6 +428,10 @@ function CanvasNodeInspector({
           <ImageGenerationParamsPanel
             params={imageParams}
             onParamsChange={setImageParams}
+          />
+          <VideoGenerationParamsPanel
+            params={videoParams}
+            onParamsChange={setVideoParams}
           />
           <Separator className="mb-4" />
         </>
@@ -775,6 +790,134 @@ function ImageGenerationParamsPanel({
           />
         </label>
       </div>
+    </div>
+  );
+}
+
+function VideoGenerationParamsPanel({
+  params,
+  onParamsChange,
+}: {
+  params: VideoGenerationParams;
+  onParamsChange: (params: VideoGenerationParams) => void;
+}) {
+  const updateParams = <K extends keyof VideoGenerationParams>(
+    field: K,
+    value: VideoGenerationParams[K],
+  ) => {
+    onParamsChange({ ...params, [field]: value });
+  };
+
+  return (
+    <div className="mb-4 space-y-3 rounded-lg border bg-background p-3">
+      <div>
+        <h4 className="text-sm font-medium">生视频参数</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          设置时长、运镜、首尾帧、参考视频和动作描述。
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="space-y-1 text-xs text-muted-foreground">
+          时长
+          <Select
+            value={String(params.duration)}
+            onValueChange={(value) => updateParams('duration', Number.parseInt(value, 10))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VIDEO_DURATION_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={String(option.value)}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="space-y-1 text-xs text-muted-foreground">
+          运镜
+          <Select
+            value={params.cameraMotion}
+            onValueChange={(value) => updateParams('cameraMotion', value as VideoGenerationParams['cameraMotion'])}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VIDEO_CAMERA_MOTION_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="space-y-1 text-xs text-muted-foreground">
+          首帧
+          <Select
+            value={params.firstFrameMode}
+            onValueChange={(value) => updateParams('firstFrameMode', value as VideoGenerationParams['firstFrameMode'])}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VIDEO_FRAME_MODE_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="space-y-1 text-xs text-muted-foreground">
+          尾帧
+          <Select
+            value={params.lastFrameMode}
+            onValueChange={(value) => updateParams('lastFrameMode', value as VideoGenerationParams['lastFrameMode'])}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VIDEO_FRAME_MODE_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </div>
+      <label className="space-y-1 text-xs text-muted-foreground">
+        参考视频
+        <Select
+          value={params.referenceVideoMode}
+          onValueChange={(value) => updateParams('referenceVideoMode', value as VideoGenerationParams['referenceVideoMode'])}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VIDEO_REFERENCE_MODE_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
+      <label className="space-y-1 text-xs text-muted-foreground">
+        动作描述
+        <Textarea
+          value={params.motionPrompt}
+          onChange={(event) => updateParams('motionPrompt', event.target.value)}
+          placeholder="例如：人物缓慢转身，镜头轻微向前推进"
+        />
+      </label>
     </div>
   );
 }
