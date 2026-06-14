@@ -82,6 +82,10 @@ import {
 import { createCanvasBatchStyleApplicationPlan } from '../lib/canvasBatchStyle';
 import { ImageGenerationParams } from '../lib/imageGenerationParams';
 import {
+  createCanvasSnapshot,
+  saveCanvasSnapshot,
+} from '../lib/canvasSnapshot';
+import {
   BlankCanvasNodeType,
   createBlankCanvasNodeInput,
 } from '../lib/canvasBlankMenu';
@@ -410,6 +414,17 @@ export default function CanvasView({
     if (plan.skipped.length > 0) {
       toast.info(`已跳过 ${plan.skipped.length} 个不支持的节点`);
     }
+  };
+
+  const handleSaveSnapshot = () => {
+    const snapshot = createCanvasSnapshot({
+      projectId,
+      title: `画布快照 ${new Date().toLocaleString()}`,
+      nodes,
+      edges,
+    });
+    saveCanvasSnapshot(window.localStorage, snapshot);
+    toast.success(`已保存画布快照：${snapshot.nodeCount} 个节点，${snapshot.edgeCount} 条连线`);
   };
 
   const handleMiniMapClick = (
@@ -771,6 +786,14 @@ export default function CanvasView({
               </Button>
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveSnapshot}
+            title="保存当前画布节点和连线快照到本地历史"
+          >
+            保存快照
+          </Button>
           {selectedNodeIds.length > 1 && (
             <>
               <Button
