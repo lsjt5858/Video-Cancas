@@ -34,6 +34,10 @@ import {
 } from '../lib/canvasNodeContextMenu';
 import { getCanvasNodeGenerationActions } from '../lib/canvasNodeGenerationActions';
 import {
+  CanvasGenerationProgressItem,
+  getCanvasGenerationProgressItems,
+} from '../lib/canvasGenerationProgress';
+import {
   calculateCenteredView,
   calculateFitView,
   calculateFocusedView,
@@ -59,7 +63,7 @@ import {
   buildCanvasNodeGroups,
   CanvasNodeGroup,
 } from '../lib/canvasNodeGroups';
-import { CanvasNode, Scene, Shot } from '../types';
+import { CanvasNode, GenerationTask, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
   projectId: string;
@@ -93,6 +97,7 @@ export default function CanvasView({
     getCanvasEdgesByProject,
     getScenesByProject,
     getShotsByProject,
+    getTasksByProject,
     createCanvasNode,
     deleteCanvasNode,
     createCanvasEdge,
@@ -103,6 +108,7 @@ export default function CanvasView({
   const shots = getShotsByProject(projectId);
   const nodes = getCanvasNodesByProject(projectId);
   const edges = getCanvasEdgesByProject(projectId);
+  const tasks = getTasksByProject(projectId);
   const [canvas, setCanvas] = useState<CanvasState>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -729,6 +735,7 @@ export default function CanvasView({
                   isSelected={selectedNodeId === node.id || selectedNodeIds.includes(node.id)}
                   scene={scene}
                   shot={shot}
+                  tasks={tasks}
                   isSceneCollapsed={isSceneCollapsed}
                   collapsedShotCount={collapsedShotCount}
                   onToggleSceneCollapse={handleToggleSceneCollapse}
@@ -930,6 +937,7 @@ function CanvasNodeCard({
   isSelected,
   scene,
   shot,
+  tasks,
   isSceneCollapsed,
   collapsedShotCount,
   onToggleSceneCollapse,
@@ -940,6 +948,7 @@ function CanvasNodeCard({
   isSelected: boolean;
   scene?: Scene;
   shot?: Shot;
+  tasks: GenerationTask[];
   isSceneCollapsed: boolean;
   collapsedShotCount: number;
   onToggleSceneCollapse: (sceneId: string, nodeId: string) => void;
@@ -951,6 +960,7 @@ function CanvasNodeCard({
   const description = getSelectedNodeDescription(node, scene, shot);
   const menuItems = getCanvasNodeContextMenuItems(node);
   const generationActions = getCanvasNodeGenerationActions(node, shot);
+  const progressItems = getCanvasGenerationProgressItems(tasks, shot?.id);
 
   return (
     <ContextMenu>
@@ -1011,6 +1021,9 @@ function CanvasNodeCard({
               />
             </div>
           )}
+          {progressItems.length > 0 && (
+            <CanvasGenerationProgressList items={progressItems} />
+          )}
           {generationActions.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {generationActions.map(action => (
@@ -1063,6 +1076,53 @@ function CanvasNodeCard({
       </ContextMenuContent>
     </ContextMenu>
   );
+}
+
+function CanvasGenerationProgressList({
+  items,
+}: {
+  items: CanvasGenerationProgressItem[];
+}) {
+  return (
+    <div className="mt-3 space-y-1.5">
+      {items.map(item => (
+        <div
+          key={item.taskId}
+          className={`rounded-md border px-2 py-1.5 text-[11px] ${getProgressToneClassName(item.tone)}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">{item.label}</span>
+            <span>{item.progressLabel}</span>
+          </div>
+          {(item.tone === 'active' || item.tone === 'success') && (
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-background/80">
+              <div
+                className={`h-full rounded-full ${item.tone === 'success' ? 'w-full bg-green-500' : 'w-2/3 bg-blue-500'}`}
+              />
+            </div>
+          )}
+          {item.description && (
+            <div className="mt-1 line-clamp-2 text-muted-foreground">
+              {item.description}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getProgressToneClassName(tone: CanvasGenerationProgressItem['tone']) {
+  if (tone === 'active') {
+    return 'border-blue-200 bg-blue-50 text-blue-700';
+  }
+  if (tone === 'success') {
+    return 'border-green-200 bg-green-50 text-green-700';
+  }
+  if (tone === 'error') {
+    return 'border-red-200 bg-red-50 text-red-700';
+  }
+  return 'border-muted bg-muted/40 text-muted-foreground';
 }
 
 function NodeStatusIcons({ node, shot }: { node: CanvasNode; shot?: Shot }) {

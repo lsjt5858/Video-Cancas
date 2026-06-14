@@ -18,7 +18,7 @@ interface ShotListProps {
 }
 
 export default function ShotList({ projectId }: ShotListProps) {
-  const { getShotsByProject, updateShot, deleteShot, createTask, createAsset } = useApp();
+  const { getShotsByProject, updateShot, deleteShot, createTask, updateTask, createAsset } = useApp();
   const shots = getShotsByProject(projectId);
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -85,8 +85,22 @@ export default function ShotList({ projectId }: ShotListProps) {
 
       // Update shot with image
       void updateShot(shot.id, { imageUrl: asset.url })
-        .then(() => toast.success('图片生成成功', { id: task.id }))
-        .catch(() => toast.error('图片回写失败', { id: task.id }));
+        .then(() => {
+          updateTask(task.id, {
+            status: 'completed',
+            resultUrl: asset.url,
+            completedAt: Date.now(),
+          });
+          toast.success('图片生成成功', { id: task.id });
+        })
+        .catch(() => {
+          updateTask(task.id, {
+            status: 'failed',
+            error: '图片回写失败',
+            completedAt: Date.now(),
+          });
+          toast.error('图片回写失败', { id: task.id });
+        });
     }, 2000);
   };
 
@@ -128,8 +142,22 @@ export default function ShotList({ projectId }: ShotListProps) {
 
       // Update shot with video
       void updateShot(shot.id, { videoUrl: asset.url })
-        .then(() => toast.success('视频生成成功', { id: task.id }))
-        .catch(() => toast.error('视频回写失败', { id: task.id }));
+        .then(() => {
+          updateTask(task.id, {
+            status: 'completed',
+            resultUrl: asset.url,
+            completedAt: Date.now(),
+          });
+          toast.success('视频生成成功', { id: task.id });
+        })
+        .catch(() => {
+          updateTask(task.id, {
+            status: 'failed',
+            error: '视频回写失败',
+            completedAt: Date.now(),
+          });
+          toast.error('视频回写失败', { id: task.id });
+        });
     }, 3000);
   };
 
