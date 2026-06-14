@@ -32,6 +32,7 @@ import {
   CanvasNodeContextMenuAction,
   getCanvasNodeContextMenuItems,
 } from '../lib/canvasNodeContextMenu';
+import { getCanvasNodeGenerationActions } from '../lib/canvasNodeGenerationActions';
 import {
   calculateCenteredView,
   calculateFitView,
@@ -949,6 +950,7 @@ function CanvasNodeCard({
   const title = getSelectedNodeTitle(node, scene, shot);
   const description = getSelectedNodeDescription(node, scene, shot);
   const menuItems = getCanvasNodeContextMenuItems(node);
+  const generationActions = getCanvasNodeGenerationActions(node, shot);
 
   return (
     <ContextMenu>
@@ -1007,6 +1009,30 @@ function CanvasNodeCard({
                 alt={shot.description}
                 className="w-full h-24 object-cover"
               />
+            </div>
+          )}
+          {generationActions.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {generationActions.map(action => (
+                <Button
+                  key={action.action}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onMenuAction(action.action, node);
+                  }}
+                >
+                  {action.label}
+                </Button>
+              ))}
             </div>
           )}
         </Card>
