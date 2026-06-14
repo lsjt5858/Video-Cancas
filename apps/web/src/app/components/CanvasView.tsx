@@ -42,6 +42,10 @@ import {
   getCanvasGenerationResultPreviews,
 } from '../lib/canvasGenerationResults';
 import {
+  CanvasImageCandidate,
+  getCanvasImageCandidates,
+} from '../lib/canvasImageCandidates';
+import {
   calculateCenteredView,
   calculateFitView,
   calculateFocusedView,
@@ -67,7 +71,7 @@ import {
   buildCanvasNodeGroups,
   CanvasNodeGroup,
 } from '../lib/canvasNodeGroups';
-import { CanvasNode, GenerationTask, Scene, Shot } from '../types';
+import { Asset, CanvasNode, GenerationTask, Scene, Shot } from '../types';
 
 interface CanvasViewProps {
   projectId: string;
@@ -102,6 +106,7 @@ export default function CanvasView({
     getScenesByProject,
     getShotsByProject,
     getTasksByProject,
+    getAssetsByProject,
     createCanvasNode,
     deleteCanvasNode,
     createCanvasEdge,
@@ -113,6 +118,7 @@ export default function CanvasView({
   const nodes = getCanvasNodesByProject(projectId);
   const edges = getCanvasEdgesByProject(projectId);
   const tasks = getTasksByProject(projectId);
+  const assets = getAssetsByProject(projectId);
   const [canvas, setCanvas] = useState<CanvasState>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -740,6 +746,7 @@ export default function CanvasView({
                   scene={scene}
                   shot={shot}
                   tasks={tasks}
+                  assets={assets}
                   isSceneCollapsed={isSceneCollapsed}
                   collapsedShotCount={collapsedShotCount}
                   onToggleSceneCollapse={handleToggleSceneCollapse}
@@ -942,6 +949,7 @@ function CanvasNodeCard({
   scene,
   shot,
   tasks,
+  assets,
   isSceneCollapsed,
   collapsedShotCount,
   onToggleSceneCollapse,
@@ -953,6 +961,7 @@ function CanvasNodeCard({
   scene?: Scene;
   shot?: Shot;
   tasks: GenerationTask[];
+  assets: Asset[];
   isSceneCollapsed: boolean;
   collapsedShotCount: number;
   onToggleSceneCollapse: (sceneId: string, nodeId: string) => void;
@@ -966,6 +975,7 @@ function CanvasNodeCard({
   const generationActions = getCanvasNodeGenerationActions(node, shot);
   const progressItems = getCanvasGenerationProgressItems(tasks, shot?.id);
   const resultPreviews = getCanvasGenerationResultPreviews(shot, tasks);
+  const imageCandidates = getCanvasImageCandidates(shot, assets, 6);
 
   return (
     <ContextMenu>
@@ -1020,6 +1030,12 @@ function CanvasNodeCard({
           {resultPreviews.length > 0 && (
             <CanvasGenerationResultPreviewList
               previews={resultPreviews}
+              description={shot?.description ?? title}
+            />
+          )}
+          {imageCandidates.length > 0 && (
+            <CanvasImageCandidateList
+              candidates={imageCandidates}
               description={shot?.description ?? title}
             />
           )}
@@ -1136,6 +1152,54 @@ function CanvasGenerationResultPreviewList({
           </div>
         </a>
       ))}
+    </div>
+  );
+}
+
+function CanvasImageCandidateList({
+  candidates,
+  description,
+}: {
+  candidates: CanvasImageCandidate[];
+  description: string;
+}) {
+  return (
+    <div className="mt-2 rounded border bg-muted/10 p-2">
+      <div className="mb-1.5 flex items-center justify-between text-[11px]">
+        <span className="font-medium">图片候选</span>
+        <span className="text-muted-foreground">{candidates.length} 张</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {candidates.map(candidate => (
+          <a
+            key={candidate.assetId}
+            href={candidate.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={candidate.isSelected ? `${candidate.label} · 当前主图` : candidate.label}
+            className={[
+              'group relative block overflow-hidden rounded border bg-muted',
+              candidate.isSelected ? 'border-green-500 ring-1 ring-green-500' : 'border-border',
+            ].join(' ')}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <img
+              src={candidate.thumbnailUrl}
+              alt={`${description} ${candidate.label}`}
+              className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
+              {candidate.isSelected ? '当前' : candidate.label}
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
