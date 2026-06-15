@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CanvasEdge, CanvasNode } from '../types';
 import {
+  buildCanvasSnapshotExport,
   createCanvasSnapshot,
   deleteCanvasSnapshot,
   getCanvasSnapshotsByProject,
@@ -141,6 +142,21 @@ describe('canvas snapshot', () => {
 
     expect(deleteCanvasSnapshot(storage, first.id)).toEqual([second]);
     expect(loadCanvasSnapshots(storage)).toEqual([second]);
+  });
+
+  it('builds a JSON export payload for one snapshot', () => {
+    const snapshot = createCanvasSnapshot({
+      projectId: 'project-1',
+      title: '可导出快照',
+      nodes,
+      edges,
+      createdAt: 1781430000000,
+    });
+
+    expect(buildCanvasSnapshotExport(snapshot)).toEqual({
+      filename: 'canvas-snapshot-project-1-1781430000000.json',
+      json: JSON.stringify(snapshot, null, 2),
+    });
   });
 });
 

@@ -14,6 +14,11 @@ export type CanvasSnapshot = {
   edges: CanvasEdge[];
 };
 
+export type CanvasSnapshotExport = {
+  filename: string;
+  json: string;
+};
+
 type CreateCanvasSnapshotInput = {
   projectId: string;
   title: string;
@@ -77,6 +82,13 @@ export function deleteCanvasSnapshot(storage: Storage, snapshotId: string): Canv
     .filter(snapshot => snapshot.id !== snapshotId);
   storage.setItem(CANVAS_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshots));
   return snapshots;
+}
+
+export function buildCanvasSnapshotExport(snapshot: CanvasSnapshot): CanvasSnapshotExport {
+  return {
+    filename: `canvas-snapshot-${snapshot.projectId}-${snapshot.createdAt}.json`,
+    json: JSON.stringify(snapshot, null, 2),
+  };
 }
 
 function isCanvasSnapshot(value: unknown): value is CanvasSnapshot {

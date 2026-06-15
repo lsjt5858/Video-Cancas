@@ -90,6 +90,7 @@ import {
 import { createCanvasBatchStyleApplicationPlan } from '../lib/canvasBatchStyle';
 import { ImageGenerationParams } from '../lib/imageGenerationParams';
 import {
+  buildCanvasSnapshotExport,
   CanvasSnapshot,
   createCanvasSnapshot,
   deleteCanvasSnapshot,
@@ -452,6 +453,12 @@ export default function CanvasView({
     const snapshots = deleteCanvasSnapshot(window.localStorage, snapshotId);
     setSnapshotHistory(getCanvasSnapshotsByProject(snapshots, projectId));
     toast.success('已删除本地画布快照');
+  };
+
+  const handleExportSnapshot = (snapshot: CanvasSnapshot) => {
+    const exportData = buildCanvasSnapshotExport(snapshot);
+    downloadTextFile(exportData.filename, exportData.json, 'application/json');
+    toast.success('已导出画布快照 JSON');
   };
 
   const handleMiniMapClick = (
@@ -846,17 +853,30 @@ export default function CanvasView({
                         {formatSnapshotTime(snapshot.createdAt)} · {snapshot.nodeCount} 节点 · {snapshot.edgeCount} 连线
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground hover:text-destructive"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        handleDeleteSnapshot(snapshot.id);
-                      }}
-                    >
-                      删除
-                    </button>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleExportSnapshot(snapshot);
+                        }}
+                      >
+                        导出
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleDeleteSnapshot(snapshot.id);
+                        }}
+                      >
+                        删除
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
