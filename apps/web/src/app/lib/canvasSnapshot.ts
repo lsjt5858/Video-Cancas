@@ -72,6 +72,13 @@ export function saveCanvasSnapshot(storage: Storage, snapshot: CanvasSnapshot): 
   return snapshots;
 }
 
+export function deleteCanvasSnapshot(storage: Storage, snapshotId: string): CanvasSnapshot[] {
+  const snapshots = loadCanvasSnapshots(storage)
+    .filter(snapshot => snapshot.id !== snapshotId);
+  storage.setItem(CANVAS_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshots));
+  return snapshots;
+}
+
 function isCanvasSnapshot(value: unknown): value is CanvasSnapshot {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CanvasEdge, CanvasNode } from '../types';
 import {
   createCanvasSnapshot,
+  deleteCanvasSnapshot,
   getCanvasSnapshotsByProject,
   loadCanvasSnapshots,
   prependCanvasSnapshot,
@@ -117,6 +118,29 @@ describe('canvas snapshot', () => {
       newestProjectSnapshot,
       projectSnapshot,
     ]);
+  });
+
+  it('deletes one snapshot from storage and keeps the remaining history', () => {
+    const storage = new MemoryStorage();
+    const first = createCanvasSnapshot({
+      projectId: 'project-1',
+      title: 'first',
+      nodes,
+      edges,
+      createdAt: 1,
+    });
+    const second = createCanvasSnapshot({
+      projectId: 'project-1',
+      title: 'second',
+      nodes,
+      edges: [],
+      createdAt: 2,
+    });
+    saveCanvasSnapshot(storage, first);
+    saveCanvasSnapshot(storage, second);
+
+    expect(deleteCanvasSnapshot(storage, first.id)).toEqual([second]);
+    expect(loadCanvasSnapshots(storage)).toEqual([second]);
   });
 });
 

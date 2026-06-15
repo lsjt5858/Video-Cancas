@@ -92,6 +92,7 @@ import { ImageGenerationParams } from '../lib/imageGenerationParams';
 import {
   CanvasSnapshot,
   createCanvasSnapshot,
+  deleteCanvasSnapshot,
   getCanvasSnapshotsByProject,
   loadCanvasSnapshots,
   saveCanvasSnapshot,
@@ -445,6 +446,12 @@ export default function CanvasView({
     const snapshots = saveCanvasSnapshot(window.localStorage, snapshot);
     setSnapshotHistory(getCanvasSnapshotsByProject(snapshots, projectId));
     toast.success(`已保存画布快照：${snapshot.nodeCount} 个节点，${snapshot.edgeCount} 条连线`);
+  };
+
+  const handleDeleteSnapshot = (snapshotId: string) => {
+    const snapshots = deleteCanvasSnapshot(window.localStorage, snapshotId);
+    setSnapshotHistory(getCanvasSnapshotsByProject(snapshots, projectId));
+    toast.success('已删除本地画布快照');
   };
 
   const handleMiniMapClick = (
@@ -829,12 +836,28 @@ export default function CanvasView({
                 </DropdownMenuItem>
               ) : (
                 snapshotHistory.slice(0, 6).map(snapshot => (
-                  <DropdownMenuItem key={snapshot.id} className="flex-col items-start gap-1">
-                    <span className="font-medium">{snapshot.title}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatSnapshotTime(snapshot.createdAt)} · {snapshot.nodeCount} 节点 · {snapshot.edgeCount} 连线
-                    </span>
-                  </DropdownMenuItem>
+                  <div
+                    key={snapshot.id}
+                    className="flex items-start justify-between gap-3 rounded-sm px-2 py-1.5 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{snapshot.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatSnapshotTime(snapshot.createdAt)} · {snapshot.nodeCount} 节点 · {snapshot.edgeCount} 连线
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handleDeleteSnapshot(snapshot.id);
+                      }}
+                    >
+                      删除
+                    </button>
+                  </div>
                 ))
               )}
             </DropdownMenuContent>
