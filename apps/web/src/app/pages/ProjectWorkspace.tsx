@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
 import {
   Dialog,
@@ -53,7 +54,14 @@ import {
   IMAGE_STYLE_OPTIONS,
   ImageGenerationParams,
   createDefaultImageGenerationParams,
+  normalizeImageGenerationParams,
 } from '../lib/imageGenerationParams';
+import {
+  ImageReferenceCandidate,
+  createImageGenerationParamsForReferenceMode,
+  getImageReferenceCandidates,
+  toggleImageReferenceNode,
+} from '../lib/imageGenerationReferences';
 import {
   VIDEO_CAMERA_MOTION_OPTIONS,
   VIDEO_DURATION_OPTIONS,
@@ -63,6 +71,7 @@ import {
   createDefaultVideoGenerationParams,
 } from '../lib/videoGenerationParams';
 import { CanvasBatchGenerationType } from '../lib/canvasBatchGeneration';
+import { CANVAS_IMAGE_GENERATION_PARAMS_KEY } from '../lib/canvasBatchStyle';
 import { buildShotForm, parseShotForm, ShotForm } from '../lib/shotForm';
 import { CanvasNode, Scene, Shot } from '../types';
 import { toast } from 'sonner';
@@ -85,6 +94,7 @@ export default function ProjectWorkspace() {
     updateScene,
     updateShot,
     updateTask,
+    updateCanvasNode,
   } = useApp();
   const [activeTab, setActiveTab] = useState('script');
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
@@ -115,6 +125,10 @@ export default function ProjectWorkspace() {
     () => selectedCanvasNode ? buildCanvasNodeDialogDetails(selectedCanvasNode, scenes, shots) : null,
     [selectedCanvasNode, scenes, shots],
   );
+  const imageReferenceCandidates = useMemo(
+    () => getImageReferenceCandidates(canvasNodes, imageParams.referenceMode),
+    [canvasNodes, imageParams.referenceMode],
+  );
 
   useEffect(() => {
     if (!project && !isLoadingProjects) {
@@ -128,6 +142,20 @@ export default function ProjectWorkspace() {
       void loadProjectData(projectId);
     }
   }, [projectId, project?.id]);
+
+  useEffect(() => {
+    if (
+      !selectedCanvasNode ||
+      (selectedCanvasNode.nodeType !== 'shot' && selectedCanvasNode.nodeType !== 'prompt')
+    ) {
+      return;
+    }
+
+    const storedParams = readStoredImageGenerationParams(selectedCanvasNode);
+    if (storedParams) {
+      setImageParams(storedParams);
+    }
+  }, [selectedCanvasNode?.id]);
 
   if (!project) {
     return null;
@@ -145,6 +173,23 @@ export default function ProjectWorkspace() {
   const handleSaveShot = async (shotId: string, updates: Partial<Shot>) => {
     await updateShot(shotId, updates);
     toast.success('镜头已保存');
+  };
+
+  const handleSaveImageParamsToSelectedNode = async () => {
+    if (
+      !selectedCanvasNode ||
+      (selectedCanvasNode.nodeType !== 'shot' && selectedCanvasNode.nodeType !== 'prompt')
+    ) {
+      return;
+    }
+
+    await updateCanvasNode(selectedCanvasNode.id, {
+      data: {
+        ...selectedCanvasNode.data,
+        [CANVAS_IMAGE_GENERATION_PARAMS_KEY]: normalizeImageGenerationParams(imageParams),
+      },
+    });
+    toast.success('生图参考参数已保存到当前节点');
   };
 
   const handleGenerateSelectedShots = (
@@ -358,6 +403,9 @@ export default function ProjectWorkspace() {
                     onSaveShot={handleSaveShot}
                     imageParams={imageParams}
                     onImageParamsChange={setImageParams}
+                    imageReferenceCandidates={imageReferenceCandidates}
+                    allCanvasNodes={canvasNodes}
+                    onSaveImageParams={handleSaveImageParamsToSelectedNode}
                     videoParams={videoParams}
                     onVideoParamsChange={setVideoParams}
                   />
@@ -391,6 +439,9 @@ function CanvasNodeInspector({
   onSaveShot,
   imageParams,
   onImageParamsChange,
+  imageReferenceCandidates,
+  allCanvasNodes,
+  onSaveImageParams,
   videoParams,
   onVideoParamsChange,
 }: {
@@ -405,6 +456,9 @@ function CanvasNodeInspector({
   onSaveShot: (shotId: string, updates: Partial<Shot>) => Promise<void>;
   imageParams: ImageGenerationParams;
   onImageParamsChange: (params: ImageGenerationParams) => void;
+  imageReferenceCandidates: ImageReferenceCandidate[];
+  allCanvasNodes: CanvasNode[];
+  onSaveImageParams: () => Promise<void>;
   videoParams: VideoGenerationParams;
   onVideoParamsChange: (params: VideoGenerationParams) => void;
 }) {
@@ -535,6 +589,9 @@ function CanvasNodeInspector({
           <ImageGenerationParamsPanel
             params={imageParams}
             onParamsChange={onImageParamsChange}
+            referenceCandidates={imageReferenceCandidates}
+            allCanvasNodes={allCanvasNodes}
+            onSaveParams={onSaveImageParams}
           />
           <VideoGenerationParamsPanel
             params={videoParams}
@@ -791,15 +848,27 @@ function GenerationModelSelect({
 function ImageGenerationParamsPanel({
   params,
   onParamsChange,
+  referenceCandidates,
+  allCanvasNodes,
+  onSaveParams,
 }: {
   params: ImageGenerationParams;
   onParamsChange: (params: ImageGenerationParams) => void;
+  referenceCandidates: ImageReferenceCandidate[];
+  allCanvasNodes: CanvasNode[];
+  onSaveParams: () => Promise<void>;
 }) {
   const updateParams = <K extends keyof ImageGenerationParams>(
     field: K,
     value: ImageGenerationParams[K],
   ) => {
     onParamsChange({ ...params, [field]: value });
+  };
+  const updateReferenceMode = (value: ImageGenerationParams['referenceMode']) => {
+    onParamsChange(createImageGenerationParamsForReferenceMode(params, value, allCanvasNodes));
+  };
+  const toggleReferenceNode = (nodeId: string) => {
+    onParamsChange(toggleImageReferenceNode(params, nodeId));
   };
 
   return (
@@ -852,7 +921,7 @@ function ImageGenerationParamsPanel({
         参考图
         <Select
           value={params.referenceMode}
-          onValueChange={(value) => updateParams('referenceMode', value as ImageGenerationParams['referenceMode'])}
+          onValueChange={(value) => updateReferenceMode(value as ImageGenerationParams['referenceMode'])}
         >
           <SelectTrigger>
             <SelectValue />
@@ -866,6 +935,34 @@ function ImageGenerationParamsPanel({
           </SelectContent>
         </Select>
       </label>
+      {params.referenceMode !== 'none' && (
+        <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-foreground">绑定参考节点</span>
+            <Badge variant="outline">{params.referenceNodeIds.length} 个已选</Badge>
+          </div>
+          {referenceCandidates.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              当前画布暂无可用参考节点。可先从剧本同步角色、地点、道具节点。
+            </p>
+          ) : (
+            <div className="max-h-40 space-y-2 overflow-auto pr-1">
+              {referenceCandidates.map(candidate => (
+                <label
+                  key={candidate.nodeId}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={params.referenceNodeIds.includes(candidate.nodeId)}
+                    onCheckedChange={() => toggleReferenceNode(candidate.nodeId)}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{candidate.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <label className="space-y-1 text-xs text-muted-foreground">
         负向提示词
         <Textarea
@@ -897,6 +994,14 @@ function ImageGenerationParamsPanel({
           />
         </label>
       </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => void onSaveParams()}
+      >
+        保存生图参数到当前节点
+      </Button>
     </div>
   );
 }
@@ -1195,6 +1300,25 @@ function parseCharacters(value: string): string[] {
     .split(/[、,\n]/)
     .map(item => item.trim())
     .filter(Boolean);
+}
+
+function readStoredImageGenerationParams(node: CanvasNode): ImageGenerationParams | null {
+  const stored = node.data[CANVAS_IMAGE_GENERATION_PARAMS_KEY];
+  if (!stored || typeof stored !== 'object') {
+    return null;
+  }
+
+  const params = stored as Partial<ImageGenerationParams> & { seed?: string | number };
+  const defaults = createDefaultImageGenerationParams();
+
+  return {
+    ...defaults,
+    ...params,
+    seed: params.seed === undefined ? '' : String(params.seed),
+    referenceNodeIds: Array.isArray(params.referenceNodeIds)
+      ? params.referenceNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string')
+      : [],
+  };
 }
 
 async function generateStoryboardFromCanvasNode(

@@ -6,6 +6,7 @@ export type ImageGenerationParams = {
   aspectRatio: ImageAspectRatio;
   style: ImageStyle;
   referenceMode: ImageReferenceMode;
+  referenceNodeIds: string[];
   negativePrompt: string;
   seed: string;
   candidateCount: number;
@@ -41,6 +42,7 @@ export function createDefaultImageGenerationParams(): ImageGenerationParams {
     aspectRatio: '16:9',
     style: 'cinematic',
     referenceMode: 'none',
+    referenceNodeIds: [],
     negativePrompt: '',
     seed: '',
     candidateCount: 4,
@@ -55,6 +57,7 @@ export function normalizeImageGenerationParams(
   return {
     ...params,
     negativePrompt: params.negativePrompt.trim(),
+    referenceNodeIds: Array.from(new Set(params.referenceNodeIds)),
     candidateCount: Math.max(1, Math.min(8, params.candidateCount)),
     ...(Number.isNaN(parsedSeed) ? { seed: undefined } : { seed: parsedSeed }),
   };

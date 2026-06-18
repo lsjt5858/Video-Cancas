@@ -27,6 +27,7 @@ describe('image generation params', () => {
       aspectRatio: '16:9',
       style: 'cinematic',
       referenceMode: 'none',
+      referenceNodeIds: [],
       negativePrompt: '',
       seed: '',
       candidateCount: 4,
@@ -41,6 +42,7 @@ describe('image generation params', () => {
     })).toMatchObject({
       seed: 42,
       candidateCount: 8,
+      referenceNodeIds: [],
     });
   });
 });
